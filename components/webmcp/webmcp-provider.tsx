@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 let globalNavigate: ((path: string) => void) | null = null;
 
@@ -469,6 +469,7 @@ const authTools: ToolDef[] = [
 
 export function WebMCPProvider() {
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     globalNavigate = (path: string) => router.push(path);
@@ -523,7 +524,7 @@ export function WebMCPProvider() {
       publicController.abort();
       authController?.abort();
     };
-  }, []);
+  }, [pathname]);
 
   return null;
 }
