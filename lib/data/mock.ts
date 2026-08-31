@@ -71,7 +71,14 @@ export const products: Product[] = [
     category: "laptop",
     brand: "Apple",
     price: 1099,
-    specs: { sizeInches: 13.6, resolution: "2560x1664", usbC: true, ramGb: 16, storageGb: 512, batteryHours: 18 },
+    specs: {
+      sizeInches: 13.6,
+      resolution: "2560x1664",
+      usbC: true,
+      ramGb: 16,
+      storageGb: 512,
+      batteryHours: 18,
+    },
   },
   {
     id: "lenovo-thinkpad-t14-gen5",
@@ -79,7 +86,14 @@ export const products: Product[] = [
     category: "laptop",
     brand: "Lenovo",
     price: 1249,
-    specs: { sizeInches: 14, resolution: "1920x1200", usbC: true, ramGb: 32, storageGb: 1000, batteryHours: 12 },
+    specs: {
+      sizeInches: 14,
+      resolution: "1920x1200",
+      usbC: true,
+      ramGb: 32,
+      storageGb: 1000,
+      batteryHours: 12,
+    },
   },
   {
     id: "dell-latitude-5450",
@@ -87,7 +101,14 @@ export const products: Product[] = [
     category: "laptop",
     brand: "Dell",
     price: 979,
-    specs: { sizeInches: 14, resolution: "1920x1200", usbC: true, ramGb: 16, storageGb: 512, batteryHours: 11 },
+    specs: {
+      sizeInches: 14,
+      resolution: "1920x1200",
+      usbC: true,
+      ramGb: 16,
+      storageGb: 512,
+      batteryHours: 11,
+    },
   },
   {
     id: "hp-elitebook-840-g11",
@@ -95,7 +116,14 @@ export const products: Product[] = [
     category: "laptop",
     brand: "HP",
     price: 1169,
-    specs: { sizeInches: 14, resolution: "1920x1200", usbC: true, ramGb: 16, storageGb: 512, batteryHours: 13 },
+    specs: {
+      sizeInches: 14,
+      resolution: "1920x1200",
+      usbC: true,
+      ramGb: 16,
+      storageGb: 512,
+      batteryHours: 13,
+    },
   },
   {
     id: "logitech-mx-keys-mini",

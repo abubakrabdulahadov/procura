@@ -5,15 +5,140 @@ import { useRouter } from "next/navigation";
 import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { CommerceHeader } from "@/components/layout/commerce-header";
 import { ProductVisual } from "@/components/products/product-visual";
-import { approveOrderRequest, emptyCart, fetchCart, fetchOrders, mutateCart, placeOrderRequest, prepareOrderRequest } from "@/lib/procurement/client";
+import {
+  approveOrderRequest,
+  emptyCart,
+  fetchCart,
+  fetchOrders,
+  mutateCart,
+  placeOrderRequest,
+  prepareOrderRequest,
+} from "@/lib/procurement/client";
 import { useEffect } from "react";
 
 export function CartPage() {
   const router = useRouter();
-  const [cart, setCart] = useState(emptyCart); const [orderCount, setOrderCount] = useState(0); const [authRequired, setAuthRequired] = useState(false);
+  const [cart, setCart] = useState(emptyCart);
+  const [orderCount, setOrderCount] = useState(0);
+  const [authRequired, setAuthRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { void Promise.all([fetchCart(), fetchOrders()]).then(([cartResult, orderResult]) => { if (cartResult.success && cartResult.cart) setCart(cartResult.cart); else if (cartResult.error?.code === "AUTH_REQUIRED") setAuthRequired(true); if (orderResult.success) setOrderCount(orderResult.count ?? 0); }); }, []);
-  const update = async (productId: string, quantity: number) => { const result = await mutateCart(quantity < 1 ? "remove" : "update", productId, quantity); if (result.success && result.cart) setCart(result.cart); else setError(result.error?.message ?? "Cart update failed."); };
-  const place = async () => { const prepared = await prepareOrderRequest(); if (!prepared.success || !prepared.proposal) return setError(prepared.error?.message ?? "Could not prepare order."); const approved = await approveOrderRequest(prepared.proposal.id); if (!approved.success || !approved.proposal) return setError(approved.error?.message ?? "Could not approve order."); const result = await placeOrderRequest(approved.proposal.id); if (!result.success) return setError(result.error?.message ?? "Could not place order."); router.push("/orders"); router.refresh(); };
-  return <div className="app-shell"><div className="app-main"><CommerceHeader cartCount={cart.itemCount} orderCount={orderCount} /><main className="standalone-page"><div className="standalone-heading"><span>Your purchase</span><h1>Shopping cart</h1><p>Review quantities and place the order when you are ready.</p></div>{authRequired ? <section className="standalone-empty"><ShoppingBag aria-hidden="true" /><h2>Sign in to use your cart</h2><p>Your cart and orders are private to your account.</p><button onClick={() => router.push("/login")}>Sign in</button></section> : cart.items.length === 0 ? <section className="standalone-empty"><ShoppingBag aria-hidden="true" /><h2>Your cart is empty</h2><p>Browse the catalog and add products to start an order.</p><button onClick={() => router.push("/")}>Browse products</button></section> : <div className="cart-page-layout"><section className="cart-page-lines">{cart.items.map((item) => <article key={item.product.id}><div className="cart-page-glyph"><ProductVisual product={item.product} compact /></div><div><span>{item.product.brand}</span><h2>{item.product.name}</h2><p>${item.unitPrice.toFixed(2)} per unit</p></div><div className="cart-page-quantity"><button onClick={() => update(item.product.id,item.quantity-1)} aria-label={`Decrease ${item.product.name}`}><Minus /></button><strong>{item.quantity}</strong><button onClick={() => mutateCart("add",item.product.id,1).then((result) => result.success && result.cart && setCart(result.cart))} aria-label={`Increase ${item.product.name}`}><Plus /></button></div><strong className="cart-page-total">${item.lineTotal.toFixed(2)}</strong><button className="cart-page-remove" onClick={() => update(item.product.id,0)} aria-label={`Remove ${item.product.name}`}><Trash2 /></button></article>)}</section><aside className="cart-summary"><span>Order summary</span><p><span>Items</span><strong>{cart.itemCount}</strong></p><p><span>Subtotal</span><strong>${cart.subtotal.toFixed(2)}</strong></p><div><span>Total</span><strong>${cart.subtotal.toFixed(2)}</strong></div>{error && <p className="cart-order-error" role="alert">{error}</p>}<button onClick={place}>Place order</button><small>Placing confirms this cart and creates the order immediately.</small></aside></div>}</main></div></div>;
+  useEffect(() => {
+    void Promise.all([fetchCart(), fetchOrders()]).then(([cartResult, orderResult]) => {
+      if (cartResult.success && cartResult.cart) setCart(cartResult.cart);
+      else if (cartResult.error?.code === "AUTH_REQUIRED") setAuthRequired(true);
+      if (orderResult.success) setOrderCount(orderResult.count ?? 0);
+    });
+  }, []);
+  const update = async (productId: string, quantity: number) => {
+    const result = await mutateCart(quantity < 1 ? "remove" : "update", productId, quantity);
+    if (result.success && result.cart) setCart(result.cart);
+    else setError(result.error?.message ?? "Cart update failed.");
+  };
+  const place = async () => {
+    const prepared = await prepareOrderRequest();
+    if (!prepared.success || !prepared.proposal)
+      return setError(prepared.error?.message ?? "Could not prepare order.");
+    const approved = await approveOrderRequest(prepared.proposal.id);
+    if (!approved.success || !approved.proposal)
+      return setError(approved.error?.message ?? "Could not approve order.");
+    const result = await placeOrderRequest(approved.proposal.id);
+    if (!result.success) return setError(result.error?.message ?? "Could not place order.");
+    router.push("/orders");
+    router.refresh();
+  };
+  return (
+    <div className="app-shell">
+      <div className="app-main">
+        <CommerceHeader cartCount={cart.itemCount} orderCount={orderCount} />
+        <main className="standalone-page">
+          <div className="standalone-heading">
+            <span>Your purchase</span>
+            <h1>Shopping cart</h1>
+            <p>Review quantities and place the order when you are ready.</p>
+          </div>
+          {authRequired ? (
+            <section className="standalone-empty">
+              <ShoppingBag aria-hidden="true" />
+              <h2>Sign in to use your cart</h2>
+              <p>Your cart and orders are private to your account.</p>
+              <button onClick={() => router.push("/login")}>Sign in</button>
+            </section>
+          ) : cart.items.length === 0 ? (
+            <section className="standalone-empty">
+              <ShoppingBag aria-hidden="true" />
+              <h2>Your cart is empty</h2>
+              <p>Browse the catalog and add products to start an order.</p>
+              <button onClick={() => router.push("/")}>Browse products</button>
+            </section>
+          ) : (
+            <div className="cart-page-layout">
+              <section className="cart-page-lines">
+                {cart.items.map((item) => (
+                  <article key={item.product.id}>
+                    <div className="cart-page-glyph">
+                      <ProductVisual product={item.product} compact />
+                    </div>
+                    <div>
+                      <span>{item.product.brand}</span>
+                      <h2>{item.product.name}</h2>
+                      <p>${item.unitPrice.toFixed(2)} per unit</p>
+                    </div>
+                    <div className="cart-page-quantity">
+                      <button
+                        onClick={() => update(item.product.id, item.quantity - 1)}
+                        aria-label={`Decrease ${item.product.name}`}
+                      >
+                        <Minus />
+                      </button>
+                      <strong>{item.quantity}</strong>
+                      <button
+                        onClick={() =>
+                          mutateCart("add", item.product.id, 1).then(
+                            (result) => result.success && result.cart && setCart(result.cart),
+                          )
+                        }
+                        aria-label={`Increase ${item.product.name}`}
+                      >
+                        <Plus />
+                      </button>
+                    </div>
+                    <strong className="cart-page-total">${item.lineTotal.toFixed(2)}</strong>
+                    <button
+                      className="cart-page-remove"
+                      onClick={() => update(item.product.id, 0)}
+                      aria-label={`Remove ${item.product.name}`}
+                    >
+                      <Trash2 />
+                    </button>
+                  </article>
+                ))}
+              </section>
+              <aside className="cart-summary">
+                <span>Order summary</span>
+                <p>
+                  <span>Items</span>
+                  <strong>{cart.itemCount}</strong>
+                </p>
+                <p>
+                  <span>Subtotal</span>
+                  <strong>${cart.subtotal.toFixed(2)}</strong>
+                </p>
+                <div>
+                  <span>Total</span>
+                  <strong>${cart.subtotal.toFixed(2)}</strong>
+                </div>
+                {error && (
+                  <p className="cart-order-error" role="alert">
+                    {error}
+                  </p>
+                )}
+                <button onClick={place}>Place order</button>
+                <small>Placing confirms this cart and creates the order immediately.</small>
+              </aside>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
 }

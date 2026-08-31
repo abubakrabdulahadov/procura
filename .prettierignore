@@ -1,0 +1,5 @@
+.next
+.data
+node_modules
+public/product-images
+pnpm-lock.yaml

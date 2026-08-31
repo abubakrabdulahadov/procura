@@ -22,9 +22,7 @@ export function searchProducts(input: SearchProductsInput = {}): SearchProductsR
     };
   }
 
-  const minimumResolution = input.minResolution
-    ? resolutionArea(input.minResolution)
-    : null;
+  const minimumResolution = input.minResolution ? resolutionArea(input.minResolution) : null;
 
   if (input.minResolution && minimumResolution === null) {
     return {

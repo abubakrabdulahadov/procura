@@ -41,4 +41,6 @@ database.exec(`
   CREATE INDEX IF NOT EXISTS orders_user_created_idx ON orders(user_id, created_at DESC);
 `);
 
-export function getDatabase() { return database; }
+export function getDatabase() {
+  return database;
+}

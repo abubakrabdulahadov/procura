@@ -1,4 +1,5 @@
-export type ProductCategory = "monitor" | "laptop" | "accessory" | "office" | "furniture" | "facilities";
+export type ProductCategory =
+  "monitor" | "laptop" | "accessory" | "office" | "furniture" | "facilities";
 
 export interface Product {
   id: string;
@@ -74,15 +75,43 @@ export type ProductDetailResult =
   | { success: false; error: { code: "PRODUCT_NOT_FOUND"; message: string } };
 
 export type ProductReviewsResult =
-  | { success: true; productId: string; rating: number; reviewCount: number; returnedCount: number; reviews: ProductReview[] }
+  | {
+      success: true;
+      productId: string;
+      rating: number;
+      reviewCount: number;
+      returnedCount: number;
+      reviews: ProductReview[];
+    }
   | { success: false; error: { code: "PRODUCT_NOT_FOUND" | "INVALID_INPUT"; message: string } };
 
 export type ProductAvailabilityResult =
-  | { success: true; availability: ProductAvailability; requestedQuantity: number; canFulfill: true }
-  | { success: false; error: { code: "PRODUCT_NOT_FOUND" | "INVALID_QUANTITY" | "INSUFFICIENT_STOCK"; message: string; availableQuantity?: number; requestedQuantity?: number } };
+  | {
+      success: true;
+      availability: ProductAvailability;
+      requestedQuantity: number;
+      canFulfill: true;
+    }
+  | {
+      success: false;
+      error: {
+        code: "PRODUCT_NOT_FOUND" | "INVALID_QUANTITY" | "INSUFFICIENT_STOCK";
+        message: string;
+        availableQuantity?: number;
+        requestedQuantity?: number;
+      };
+    };
 
 export type InstallmentOptionsResult =
-  | { success: true; productId: string; eligible: boolean; unitPrice: number; quantity: number; total: number; plans: InstallmentPlan[] }
+  | {
+      success: true;
+      productId: string;
+      eligible: boolean;
+      unitPrice: number;
+      quantity: number;
+      total: number;
+      plans: InstallmentPlan[];
+    }
   | { success: false; error: { code: "PRODUCT_NOT_FOUND" | "INVALID_QUANTITY"; message: string } };
 
 export interface CartItem {
@@ -103,9 +132,18 @@ export interface Cart {
 export type CartResult = { success: true; cart: Cart };
 export type CartMutationResult =
   | { success: true; cart: Cart; message: string }
-  | { success: false; error: { code: "PRODUCT_NOT_FOUND" | "INVALID_QUANTITY" | "ITEM_NOT_IN_CART" | "INSUFFICIENT_STOCK"; message: string; availableQuantity?: number; requestedQuantity?: number } };
+  | {
+      success: false;
+      error: {
+        code: "PRODUCT_NOT_FOUND" | "INVALID_QUANTITY" | "ITEM_NOT_IN_CART" | "INSUFFICIENT_STOCK";
+        message: string;
+        availableQuantity?: number;
+        requestedQuantity?: number;
+      };
+    };
 
-export type OrderProposalStatus = "pending_human_approval" | "approved" | "rejected" | "changes_requested";
+export type OrderProposalStatus =
+  "pending_human_approval" | "approved" | "rejected" | "changes_requested";
 
 export interface OrderProposal {
   id: string;
@@ -123,7 +161,13 @@ export interface OrderProposal {
 
 export type PrepareOrderResult =
   | { success: true; proposal: OrderProposal; message: string }
-  | { success: false; error: { code: "EMPTY_CART" | "INVALID_CART" | "INVALID_INSTALLMENT_TERM" | "INSUFFICIENT_STOCK"; message: string } };
+  | {
+      success: false;
+      error: {
+        code: "EMPTY_CART" | "INVALID_CART" | "INVALID_INSTALLMENT_TERM" | "INSUFFICIENT_STOCK";
+        message: string;
+      };
+    };
 
 export type OrderProposalDecision = "approve" | "reject" | "request_changes";
 
@@ -141,7 +185,19 @@ export interface Order {
 
 export type PlaceOrderResult =
   | { success: true; order: Order; message: string }
-  | { success: false; error: { code: "PROPOSAL_NOT_FOUND" | "APPROVAL_REQUIRED" | "CART_CHANGED_AFTER_APPROVAL" | "ORDER_ALREADY_PLACED" | "INSUFFICIENT_STOCK"; message: string; orderId?: string } };
+  | {
+      success: false;
+      error: {
+        code:
+          | "PROPOSAL_NOT_FOUND"
+          | "APPROVAL_REQUIRED"
+          | "CART_CHANGED_AFTER_APPROVAL"
+          | "ORDER_ALREADY_PLACED"
+          | "INSUFFICIENT_STOCK";
+        message: string;
+        orderId?: string;
+      };
+    };
 
 export type GetOrderResult =
   | { success: true; order: Order }

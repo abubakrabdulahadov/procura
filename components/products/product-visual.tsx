@@ -20,26 +20,54 @@ function getProductImage(product: Product) {
     return "/product-images/dock.png";
   }
   if (product.category === "furniture") {
-    if (name.includes("chair") || name.includes("stool") || name.includes("sofa")) return "/product-images/chair.png";
+    if (name.includes("chair") || name.includes("stool") || name.includes("sofa"))
+      return "/product-images/chair.png";
     if (name.includes("desk") || name.includes("table")) return "/product-images/desk.png";
-    if (name.includes("whiteboard") || name.includes("divider")) return "/product-images/whiteboard.png";
+    if (name.includes("whiteboard") || name.includes("divider"))
+      return "/product-images/whiteboard.png";
     return "/product-images/storage.png";
   }
   if (product.category === "office") {
-    if (["label", "shipping", "packing", "bubble", "mailer", "box"].some((term) => name.includes(term))) return "/product-images/packaging.png";
+    if (
+      ["label", "shipping", "packing", "bubble", "mailer", "box"].some((term) =>
+        name.includes(term),
+      )
+    )
+      return "/product-images/packaging.png";
     return "/product-images/paper.png";
   }
   if (product.category === "facilities") {
-    if (["coffee", "kettle", "microwave", "water dispenser"].some((term) => name.includes(term))) return "/product-images/breakroom.png";
-    if (["first aid", "safety", "fire extinguisher", "ladder"].some((term) => name.includes(term))) return "/product-images/safety.png";
+    if (["coffee", "kettle", "microwave", "water dispenser"].some((term) => name.includes(term)))
+      return "/product-images/breakroom.png";
+    if (["first aid", "safety", "fire extinguisher", "ladder"].some((term) => name.includes(term)))
+      return "/product-images/safety.png";
   }
   return categoryImages[product.category];
 }
 
-export function ProductVisual({ product, compact = false }: { product: Product; compact?: boolean }) {
-  const variant = [...product.id].reduce((total, character) => total + character.charCodeAt(0), 0) % 5;
-  return <div className={`commerce-visual render-visual render-${product.category} render-variant-${variant} ${compact ? "render-compact" : ""}`} aria-hidden="true">
-    <span className="visual-brand">{product.brand}</span>
-    <div className="product-render-shell"><Image src={getProductImage(product)} alt="" fill sizes="(max-width: 620px) 82vw, (max-width: 920px) 38vw, 260px" /></div>
-  </div>;
+export function ProductVisual({
+  product,
+  compact = false,
+}: {
+  product: Product;
+  compact?: boolean;
+}) {
+  const variant =
+    [...product.id].reduce((total, character) => total + character.charCodeAt(0), 0) % 5;
+  return (
+    <div
+      className={`commerce-visual render-visual render-${product.category} render-variant-${variant} ${compact ? "render-compact" : ""}`}
+      aria-hidden="true"
+    >
+      <span className="visual-brand">{product.brand}</span>
+      <div className="product-render-shell">
+        <Image
+          src={getProductImage(product)}
+          alt=""
+          fill
+          sizes="(max-width: 620px) 82vw, (max-width: 920px) 38vw, 260px"
+        />
+      </div>
+    </div>
+  );
 }

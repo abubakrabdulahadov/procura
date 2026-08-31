@@ -1,2 +1,4 @@
 import { OrdersPage } from "@/components/orders/orders-page";
-export default function Page() { return <OrdersPage />; }
+export default function Page() {
+  return <OrdersPage />;
+}

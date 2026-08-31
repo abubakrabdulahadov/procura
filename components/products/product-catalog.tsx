@@ -19,17 +19,33 @@ export function ProductCatalog() {
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [cart, setCart] = useState(emptyCart);
   const [orderCount, setOrderCount] = useState(0);
-  const result = useMemo(() => searchProducts({ category: category === "all" ? undefined : category, maxPrice }), [category, maxPrice]);
+  const result = useMemo(
+    () => searchProducts({ category: category === "all" ? undefined : category, maxPrice }),
+    [category, maxPrice],
+  );
   const visibleProducts = useMemo(() => {
     if (!result.success) return [];
     return result.products
-      .filter((product) => `${product.brand} ${product.name}`.toLowerCase().includes(query.toLowerCase()))
+      .filter((product) =>
+        `${product.brand} ${product.name}`.toLowerCase().includes(query.toLowerCase()),
+      )
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [query, result]);
 
-  useEffect(() => { void Promise.all([fetchCart(), fetchOrders()]).then(([cartResult, ordersResult]) => { if (cartResult.success && cartResult.cart) setCart(cartResult.cart); if (ordersResult.success) setOrderCount(ordersResult.count ?? 0); }); }, []);
+  useEffect(() => {
+    void Promise.all([fetchCart(), fetchOrders()]).then(([cartResult, ordersResult]) => {
+      if (cartResult.success && cartResult.cart) setCart(cartResult.cart);
+      if (ordersResult.success) setOrderCount(ordersResult.count ?? 0);
+    });
+  }, []);
 
-  const addItem = async (productId: string, quantity: number) => { const result = await mutateCart("add", productId, quantity); if (result.success && result.cart) { setCart(result.cart); setSelectedProductId(null); } else if (result.error?.code === "AUTH_REQUIRED") router.push("/login"); };
+  const addItem = async (productId: string, quantity: number) => {
+    const result = await mutateCart("add", productId, quantity);
+    if (result.success && result.cart) {
+      setCart(result.cart);
+      setSelectedProductId(null);
+    } else if (result.error?.code === "AUTH_REQUIRED") router.push("/login");
+  };
 
   return (
     <div className="app-shell">
@@ -38,27 +54,152 @@ export function ProductCatalog() {
 
         <main className="workspace workspace-single">
           <section className="catalog" id="catalog">
-            <div className="page-heading"><div><span className="page-overline">Procurement catalog</span><h1>Products</h1><p>Search goods and equipment across your procurement catalog.</p></div></div>
+            <div className="page-heading">
+              <div>
+                <span className="page-overline">Procurement catalog</span>
+                <h1>Products</h1>
+                <p>Search goods and equipment across your procurement catalog.</p>
+              </div>
+            </div>
             <div className="catalog-surface">
               <div className="table-toolbar">
-                <label className="search-field"><Search className="field-icon" aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search products…" aria-label="Search products" />{query && <button className="field-clear" type="button" aria-label="Clear search" onClick={() => setQuery("")}><X aria-hidden="true" /></button>}</label>
+                <label className="search-field">
+                  <Search className="field-icon" aria-hidden="true" />
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search products…"
+                    aria-label="Search products"
+                  />
+                  {query && (
+                    <button
+                      className="field-clear"
+                      type="button"
+                      aria-label="Clear search"
+                      onClick={() => setQuery("")}
+                    >
+                      <X aria-hidden="true" />
+                    </button>
+                  )}
+                </label>
                 <div className="toolbar-divider" />
-                <GlassSelect label="Category" value={category} options={[{ value: "all", label: "All" }, { value: "monitor", label: "Monitors" }, { value: "laptop", label: "Laptops" }, { value: "accessory", label: "Accessories" }, { value: "office", label: "Office supplies" }, { value: "furniture", label: "Furniture" }, { value: "facilities", label: "Facilities" }]} onChange={setCategory} count={result.success ? result.count : 0} />
-                <GlassSelect label="Price" value={maxPrice ? String(maxPrice) : "any"} options={[{ value: "any", label: "Any" }, { value: "300", label: "≤ $300" }, { value: "400", label: "≤ $400" }, { value: "500", label: "≤ $500" }]} onChange={(value) => setMaxPrice(value === "any" ? undefined : Number(value))} />
-                {(query || category !== "all" || maxPrice !== undefined) && <button className="clear-filters" onClick={() => { setQuery(""); setCategory("all"); setMaxPrice(undefined); }}>Clear all</button>}
+                <GlassSelect
+                  label="Category"
+                  value={category}
+                  options={[
+                    { value: "all", label: "All" },
+                    { value: "monitor", label: "Monitors" },
+                    { value: "laptop", label: "Laptops" },
+                    { value: "accessory", label: "Accessories" },
+                    { value: "office", label: "Office supplies" },
+                    { value: "furniture", label: "Furniture" },
+                    { value: "facilities", label: "Facilities" },
+                  ]}
+                  onChange={setCategory}
+                  count={result.success ? result.count : 0}
+                />
+                <GlassSelect
+                  label="Price"
+                  value={maxPrice ? String(maxPrice) : "any"}
+                  options={[
+                    { value: "any", label: "Any" },
+                    { value: "300", label: "≤ $300" },
+                    { value: "400", label: "≤ $400" },
+                    { value: "500", label: "≤ $500" },
+                  ]}
+                  onChange={(value) => setMaxPrice(value === "any" ? undefined : Number(value))}
+                />
+                {(query || category !== "all" || maxPrice !== undefined) && (
+                  <button
+                    className="clear-filters"
+                    onClick={() => {
+                      setQuery("");
+                      setCategory("all");
+                      setMaxPrice(undefined);
+                    }}
+                  >
+                    Clear all
+                  </button>
+                )}
               </div>
 
-              {visibleProducts.length === 0 ? <div className="catalog-empty"><strong>No products found</strong><span>Try a different search or reset the active filters.</span><button onClick={() => { setQuery(""); setCategory("all"); setMaxPrice(undefined); }}>Reset filters</button></div> : <div className="commerce-grid">{visibleProducts.map((product) => (
-                <article className="commerce-card" key={product.id} role="button" tabIndex={0} onClick={() => setSelectedProductId(product.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedProductId(product.id); }} aria-label={`View ${product.name} details`}>
-                  <div className="commerce-media"><ProductVisual product={product} /><span className="category-badge">{product.category}</span></div>
-                  <div className="commerce-body"><p className="commerce-brand">{product.brand}</p><h3>{product.name}</h3><div className="commerce-specs">{product.specs.sizeInches && <span>{product.specs.sizeInches}&quot;</span>}{product.specs.resolution && <span>{product.specs.resolution}</span>}{product.specs.refreshRateHz && <span>{product.specs.refreshRateHz} Hz</span>}{product.specs.ramGb && <span>{product.specs.ramGb} GB RAM</span>}{product.specs.storageGb && <span>{product.specs.storageGb >= 1000 ? `${product.specs.storageGb / 1000} TB` : `${product.specs.storageGb} GB`}</span>}{product.specs.connection && <span>{product.specs.connection}</span>}{product.specs.material && <span>{product.specs.material}</span>}{product.specs.packSize && <span>Pack of {product.specs.packSize}</span>}{product.specs.usbC && <span className="spec-accent">USB-C</span>}</div><div className="commerce-meta"><span>Unit price</span><strong>${product.price.toFixed(2)}</strong></div></div>
-                </article>
-              ))}</div>}
+              {visibleProducts.length === 0 ? (
+                <div className="catalog-empty">
+                  <strong>No products found</strong>
+                  <span>Try a different search or reset the active filters.</span>
+                  <button
+                    onClick={() => {
+                      setQuery("");
+                      setCategory("all");
+                      setMaxPrice(undefined);
+                    }}
+                  >
+                    Reset filters
+                  </button>
+                </div>
+              ) : (
+                <div className="commerce-grid">
+                  {visibleProducts.map((product) => (
+                    <article
+                      className="commerce-card"
+                      key={product.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedProductId(product.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ")
+                          setSelectedProductId(product.id);
+                      }}
+                      aria-label={`View ${product.name} details`}
+                    >
+                      <div className="commerce-media">
+                        <ProductVisual product={product} />
+                        <span className="category-badge">{product.category}</span>
+                      </div>
+                      <div className="commerce-body">
+                        <p className="commerce-brand">{product.brand}</p>
+                        <h3>{product.name}</h3>
+                        <div className="commerce-specs">
+                          {product.specs.sizeInches && (
+                            <span>{product.specs.sizeInches}&quot;</span>
+                          )}
+                          {product.specs.resolution && <span>{product.specs.resolution}</span>}
+                          {product.specs.refreshRateHz && (
+                            <span>{product.specs.refreshRateHz} Hz</span>
+                          )}
+                          {product.specs.ramGb && <span>{product.specs.ramGb} GB RAM</span>}
+                          {product.specs.storageGb && (
+                            <span>
+                              {product.specs.storageGb >= 1000
+                                ? `${product.specs.storageGb / 1000} TB`
+                                : `${product.specs.storageGb} GB`}
+                            </span>
+                          )}
+                          {product.specs.connection && <span>{product.specs.connection}</span>}
+                          {product.specs.material && <span>{product.specs.material}</span>}
+                          {product.specs.packSize && <span>Pack of {product.specs.packSize}</span>}
+                          {product.specs.usbC && <span className="spec-accent">USB-C</span>}
+                        </div>
+                        <div className="commerce-meta">
+                          <span>Unit price</span>
+                          <strong>${product.price.toFixed(2)}</strong>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
         </main>
       </div>
-      {selectedProductId && <ProductDetail productId={selectedProductId} onClose={() => setSelectedProductId(null)} onAddToCart={addItem} />}
+      {selectedProductId && (
+        <ProductDetail
+          productId={selectedProductId}
+          onClose={() => setSelectedProductId(null)}
+          onAddToCart={addItem}
+        />
+      )}
     </div>
   );
 }
