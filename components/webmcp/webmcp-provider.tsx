@@ -315,7 +315,7 @@ const toolDefs: ToolDef[] = [
     name: "place_order",
     title: "Place Order",
     description:
-      "Place an order from cart. Supports installments (3, 6, 12, 24 months). Min $100 for installments. Fees: 3/6mo 0%, 12mo 4%, 24mo 9%. Requires sign-in — call check_auth_status first.",
+      "Place an order from cart. Installments (3, 6, 12, 24 months) require each item's line total >= $100. Fees: 3/6mo 0%, 12mo 4%, 24mo 9%. Requires sign-in — call check_auth_status first.",
     inputSchema: {
       type: "object",
       properties: {
@@ -354,6 +354,27 @@ const toolDefs: ToolDef[] = [
     inputSchema: { type: "object", properties: {} },
     annotations: { readOnlyHint: true },
     execute: traced("view_orders", "Order History", async () => json(await api("/api/orders"))),
+  },
+  {
+    name: "cancel_order",
+    title: "Cancel Order",
+    description:
+      "Cancel an active order by its ID. Only placed (active) orders can be cancelled. Requires sign-in — call check_auth_status first.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        orderId: { type: "string", description: "Order ID to cancel" },
+      },
+      required: ["orderId"],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true },
+    execute: traced("cancel_order", "Cancel Order", async (input) => {
+      const result = await postJson("/api/orders/cancel", {
+        orderId: input.orderId,
+      });
+      emit();
+      return json(result);
+    }),
   },
 ];
 

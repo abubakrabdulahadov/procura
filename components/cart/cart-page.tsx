@@ -37,7 +37,9 @@ export function CartPage() {
 
   const fee = Number((cart.subtotal * (installmentOptions.find((o) => o.months === selectedPlan)?.rate ?? 0)).toFixed(2));
   const total = Number((cart.subtotal + fee).toFixed(2));
-  const eligible = cart.subtotal >= 100;
+  const minEligible = cart.subtotal >= 100;
+  const ineligibleItems = cart.items.filter((item) => item.lineTotal < 100);
+  const eligible = minEligible && ineligibleItems.length === 0;
 
   const reload = useCallback(() => {
     void Promise.all([fetchCart(), fetchOrders()])
@@ -208,11 +210,23 @@ export function CartPage() {
                           ) : option.months ? (
                             <small>No fee</small>
                           ) : null}
-                          {disabled && <small>Min. $100</small>}
                         </button>
                       );
                     })}
                   </div>
+                  {!eligible && (
+                    <div className="checkout-installment-note">
+                      {!minEligible ? (
+                        <small>Installments require a minimum order of $100.</small>
+                      ) : (
+                        <small>
+                          Each item must total at least $100 for installments.{" "}
+                          {ineligibleItems.map((i) => i.product.name).join(", ")}{" "}
+                          {ineligibleItems.length === 1 ? "doesn't" : "don't"} qualify.
+                        </small>
+                      )}
+                    </div>
+                  )}
 
                   <p>
                     <span>Subtotal</span>

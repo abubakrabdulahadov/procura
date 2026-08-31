@@ -179,7 +179,7 @@ export interface Order {
   installmentMonths?: 3 | 6 | 12 | 24;
   paymentFee: number;
   total: number;
-  status: "placed";
+  status: "placed" | "cancelled";
   createdAt: string;
 }
 
@@ -202,3 +202,13 @@ export type PlaceOrderResult =
 export type GetOrderResult =
   | { success: true; order: Order }
   | { success: false; error: { code: "ORDER_NOT_FOUND"; message: string } };
+
+export type CancelOrderResult =
+  | { success: true; order: Order; message: string }
+  | {
+      success: false;
+      error: {
+        code: "ORDER_NOT_FOUND" | "ORDER_ALREADY_CANCELLED";
+        message: string;
+      };
+    };

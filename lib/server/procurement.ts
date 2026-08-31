@@ -121,6 +121,17 @@ export async function prepareUserOrder(userId: string, installmentMonths?: numbe
         message: "Installment plans require a minimum order of $100.",
       },
     };
+  if (installmentMonths !== undefined) {
+    const ineligible = cart.items.filter((item) => item.lineTotal < 100);
+    if (ineligible.length > 0)
+      return {
+        success: false as const,
+        error: {
+          code: "INVALID_INSTALLMENT_TERM",
+          message: `Installment plans require each item total to be at least $100. These items don't qualify: ${ineligible.map((i) => `${i.product.name} ($${i.lineTotal.toFixed(2)})`).join(", ")}. Remove them or increase quantity to reach $100 per item, or choose single payment.`,
+        },
+      };
+  }
   const rate = installmentMonths === 12 ? 0.04 : installmentMonths === 24 ? 0.09 : 0;
   const paymentFee = Number((cart.subtotal * rate).toFixed(2));
   const ranges = cart.items
@@ -267,6 +278,30 @@ export async function listUserOrders(userId: string): Promise<Order[]> {
     .where(eq(orders.userId, userId))
     .orderBy(desc(orders.createdAt));
   return rows.map((row) => JSON.parse(row.orderJson) as Order);
+}
+
+export async function cancelUserOrder(userId: string, orderId: string) {
+  const [row] = await db
+    .select({ orderJson: orders.orderJson })
+    .from(orders)
+    .where(and(eq(orders.id, orderId), eq(orders.userId, userId)));
+  if (!row)
+    return {
+      success: false as const,
+      error: { code: "ORDER_NOT_FOUND", message: `No order exists with ID ${orderId}.` },
+    };
+  const order = JSON.parse(row.orderJson) as Order;
+  if (order.status === "cancelled")
+    return {
+      success: false as const,
+      error: { code: "ORDER_ALREADY_CANCELLED", message: `Order ${orderId} is already cancelled.` },
+    };
+  const updated: Order = { ...order, status: "cancelled" };
+  await db
+    .update(orders)
+    .set({ orderJson: JSON.stringify(updated) })
+    .where(and(eq(orders.id, orderId), eq(orders.userId, userId)));
+  return { success: true as const, order: updated, message: `Order ${orderId} cancelled.` };
 }
 
 export async function getUserOrder(userId: string, orderId: string) {

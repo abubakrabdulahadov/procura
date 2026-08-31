@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PackageCheck } from "lucide-react";
+import { PackageCheck, X } from "lucide-react";
 import { CommerceHeader } from "@/components/layout/commerce-header";
-import { emptyCart, fetchCart, fetchOrders } from "@/lib/procurement/client";
+import { cancelOrderRequest, emptyCart, fetchCart, fetchOrders } from "@/lib/procurement/client";
+import { useWebMCPSync } from "@/lib/webmcp/use-sync";
 import type { Order } from "@/types/procurement";
 
 export function OrdersPage() {
@@ -12,7 +13,9 @@ export function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [cart, setCart] = useState(emptyCart);
   const [authRequired, setAuthRequired] = useState(false);
-  useEffect(() => {
+  const [cancelling, setCancelling] = useState<string | null>(null);
+
+  const reload = useCallback(() => {
     void Promise.all([fetchCart(), fetchOrders()])
       .then(([cartResult, orderResult]) => {
         if (cartResult.success && cartResult.cart) setCart(cartResult.cart);
@@ -21,6 +24,22 @@ export function OrdersPage() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(reload, [reload]);
+  useWebMCPSync(reload);
+
+  const cancelOrder = async (orderId: string) => {
+    if (cancelling) return;
+    setCancelling(orderId);
+    const result = await cancelOrderRequest(orderId);
+    if (result.success && result.order) {
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? result.order! : o)),
+      );
+    }
+    setCancelling(null);
+  };
+
   return (
     <div className="app-shell">
       <div className="app-main">
@@ -48,13 +67,33 @@ export function OrdersPage() {
           ) : (
             <section className="orders-page-list">
               {orders.map((order) => (
-                <article key={order.id}>
+                <article key={order.id} className={order.status === "cancelled" ? "order-cancelled" : ""}>
                   <header>
                     <div>
                       <span>Placed {new Date(order.createdAt).toLocaleDateString()}</span>
                       <h2>{order.id}</h2>
                     </div>
-                    <b>{order.status}</b>
+                    <div className="order-header-actions">
+                      <b className={`order-status order-status-${order.status}`}>
+                        {order.status === "placed" ? "Active" : "Cancelled"}
+                      </b>
+                      {order.status === "placed" && (
+                        <button
+                          className="order-cancel-btn"
+                          onClick={() => cancelOrder(order.id)}
+                          disabled={cancelling === order.id}
+                          aria-label={`Cancel order ${order.id}`}
+                        >
+                          {cancelling === order.id ? (
+                            "Cancelling…"
+                          ) : (
+                            <>
+                              <X size={14} /> Cancel
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </header>
                   <div>
                     {order.items.map((item) => (

@@ -86,6 +86,20 @@ export async function placeOrderRequest(proposalId: string) {
     error?: { code: string; message: string; orderId?: string };
   };
 }
+export async function cancelOrderRequest(orderId: string) {
+  return (
+    await jsonRequest("/api/orders/cancel", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ orderId }),
+    })
+  ).data as {
+    success: boolean;
+    order?: Order;
+    message?: string;
+    error?: { code: string; message: string };
+  };
+}
 export async function fetchOrders() {
   return (await jsonRequest("/api/orders")).data as {
     success: boolean;

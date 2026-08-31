@@ -3628,6 +3628,18 @@ summary:focus-visible {
 .checkout-plan.active strong {
   color: #214e3b;
 }
+.checkout-installment-note {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(201, 163, 38, 0.08);
+  border: 1px solid rgba(201, 163, 38, 0.15);
+}
+.checkout-installment-note small {
+  color: #8a7020;
+  font-size: 7.5px;
+  font-weight: 560;
+  line-height: 1.5;
+}
 .checkout-plan:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -3666,13 +3678,54 @@ summary:focus-visible {
   margin: 5px 0 0;
   font-size: 13px;
 }
-.orders-page-list header > b {
+.order-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.order-status {
   padding: 6px 9px;
   border-radius: 8px;
+  font-size: 7px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.order-status-placed {
   background: #e0efe7;
   color: #287653;
-  font-size: 7px;
-  text-transform: uppercase;
+}
+.order-status-cancelled {
+  background: #f3e3df;
+  color: #9c3b2a;
+}
+.order-cancel-btn {
+  height: 28px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(185, 28, 28, 0.15);
+  border-radius: 8px;
+  background: rgba(185, 28, 28, 0.05);
+  color: #b91c1c;
+  font-size: 7.5px;
+  font-weight: 640;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.order-cancel-btn:hover:not(:disabled) {
+  background: rgba(185, 28, 28, 0.1);
+  border-color: rgba(185, 28, 28, 0.25);
+}
+.order-cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.order-cancelled {
+  opacity: 0.6;
+}
+.order-cancelled footer strong {
+  text-decoration: line-through;
 }
 .orders-page-list article > div {
   margin-top: 13px;
