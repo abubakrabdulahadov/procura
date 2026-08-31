@@ -12,6 +12,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ord
       { status: 401 },
     );
   const { orderId } = await params;
-  const result = getUserOrder(user.id, orderId);
+  const result = await getUserOrder(user.id, orderId);
   return NextResponse.json(result, { status: result.success ? 200 : 404 });
 }

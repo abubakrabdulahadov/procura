@@ -1,23 +1,12 @@
+import { and, desc, eq } from "drizzle-orm";
 import { products } from "@/lib/data/mock";
 import { checkProductAvailability } from "@/lib/procurement/product-intelligence";
-import { getDatabase } from "@/lib/server/database";
+import { db } from "@/lib/server/database";
+import { carts, orderProposals, orders } from "@/lib/server/schema";
 import type { Cart, Order, OrderProposal } from "@/types/procurement";
 
-interface CartRow {
-  quantities_json: string;
-  updated_at: string;
-}
-interface ProposalRow {
-  proposal_json: string;
-  status: OrderProposal["status"];
-  approval_token?: string;
-}
-interface OrderRow {
-  order_json: string;
-}
-
-function cartSnapshot(row: CartRow): Cart {
-  const quantities = JSON.parse(row.quantities_json) as Record<string, number>;
+function cartSnapshot(row: { quantitiesJson: string; updatedAt: string }): Cart {
+  const quantities = JSON.parse(row.quantitiesJson) as Record<string, number>;
   const items = Object.entries(quantities).flatMap(([productId, quantity]) => {
     const product = products.find((candidate) => candidate.id === productId);
     return product
@@ -36,25 +25,24 @@ function cartSnapshot(row: CartRow): Cart {
     items,
     itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
     subtotal: Number(items.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2)),
-    updatedAt: row.updated_at,
+    updatedAt: row.updatedAt,
   };
 }
 
-export function getUserCart(userId: string): Cart {
-  const database = getDatabase();
-  let row = database
-    .prepare("SELECT quantities_json, updated_at FROM carts WHERE user_id = ?")
-    .get(userId) as CartRow | undefined;
+export async function getUserCart(userId: string): Promise<Cart> {
+  let [row] = await db
+    .select({ quantitiesJson: carts.quantitiesJson, updatedAt: carts.updatedAt })
+    .from(carts)
+    .where(eq(carts.userId, userId));
   if (!row) {
-    database
-      .prepare("INSERT INTO carts (user_id, quantities_json, updated_at) VALUES (?, '{}', ?)")
-      .run(userId, new Date(0).toISOString());
-    row = { quantities_json: "{}", updated_at: new Date(0).toISOString() };
+    const updatedAt = new Date(0).toISOString();
+    await db.insert(carts).values({ userId, quantitiesJson: "{}", updatedAt });
+    row = { quantitiesJson: "{}", updatedAt };
   }
   return cartSnapshot(row);
 }
 
-export function mutateUserCart(
+export async function mutateUserCart(
   userId: string,
   action: "add" | "update" | "remove",
   productId: string,
@@ -69,7 +57,7 @@ export function mutateUserCart(
         message: `No catalog product exists with ID ${productId}.`,
       },
     };
-  const current = getUserCart(userId);
+  const current = await getUserCart(userId);
   const quantities = Object.fromEntries(
     current.items.map((item) => [item.product.id, item.quantity]),
   );
@@ -96,10 +84,11 @@ export function mutateUserCart(
     delete quantities[productId];
   }
   const updatedAt = new Date().toISOString();
-  getDatabase()
-    .prepare("UPDATE carts SET quantities_json = ?, updated_at = ? WHERE user_id = ?")
-    .run(JSON.stringify(quantities), updatedAt, userId);
-  const cart = getUserCart(userId);
+  await db
+    .update(carts)
+    .set({ quantitiesJson: JSON.stringify(quantities), updatedAt })
+    .where(eq(carts.userId, userId));
+  const cart = await getUserCart(userId);
   const message =
     action === "add"
       ? `${quantity} × ${product.name} added to cart.`
@@ -109,8 +98,8 @@ export function mutateUserCart(
   return { success: true as const, cart, message };
 }
 
-export function prepareUserOrder(userId: string, installmentMonths?: number) {
-  const cart = getUserCart(userId);
+export async function prepareUserOrder(userId: string, installmentMonths?: number) {
+  const cart = await getUserCart(userId);
   if (!cart.items.length)
     return {
       success: false as const,
@@ -143,11 +132,13 @@ export function prepareUserOrder(userId: string, installmentMonths?: number) {
     status: "pending_human_approval",
     createdAt: new Date().toISOString(),
   };
-  getDatabase()
-    .prepare(
-      "INSERT INTO order_proposals (id, user_id, proposal_json, status, created_at) VALUES (?, ?, ?, ?, ?)",
-    )
-    .run(proposal.id, userId, JSON.stringify(proposal), proposal.status, proposal.createdAt);
+  await db.insert(orderProposals).values({
+    id: proposal.id,
+    userId,
+    proposalJson: JSON.stringify(proposal),
+    status: proposal.status,
+    createdAt: proposal.createdAt,
+  });
   return {
     success: true as const,
     proposal,
@@ -155,49 +146,58 @@ export function prepareUserOrder(userId: string, installmentMonths?: number) {
   };
 }
 
-export function decideUserProposal(
+export async function decideUserProposal(
   userId: string,
   proposalId: string,
   decision: "approve" | "reject" | "request_changes",
 ) {
-  const row = getDatabase()
-    .prepare(
-      "SELECT proposal_json, status, approval_token FROM order_proposals WHERE id = ? AND user_id = ?",
-    )
-    .get(proposalId, userId) as ProposalRow | undefined;
+  const [row] = await db
+    .select({
+      proposalJson: orderProposals.proposalJson,
+      status: orderProposals.status,
+      approvalToken: orderProposals.approvalToken,
+    })
+    .from(orderProposals)
+    .where(and(eq(orderProposals.id, proposalId), eq(orderProposals.userId, userId)));
   if (!row || row.status !== "pending_human_approval")
     return {
       success: false as const,
       error: { code: "PROPOSAL_NOT_APPROVABLE", message: "This proposal cannot be approved." },
     };
-  const proposal = JSON.parse(row.proposal_json) as OrderProposal;
+  const proposal = JSON.parse(row.proposalJson) as OrderProposal;
   const status =
     decision === "approve" ? "approved" : decision === "reject" ? "rejected" : "changes_requested";
   const approvalToken = decision === "approve" ? `approval-${crypto.randomUUID()}` : undefined;
   const updated: OrderProposal = { ...proposal, status, approvalToken };
-  getDatabase()
-    .prepare(
-      "UPDATE order_proposals SET proposal_json = ?, status = ?, approval_token = ? WHERE id = ? AND user_id = ?",
-    )
-    .run(JSON.stringify(updated), status, approvalToken ?? null, proposalId, userId);
+  await db
+    .update(orderProposals)
+    .set({
+      proposalJson: JSON.stringify(updated),
+      status,
+      approvalToken: approvalToken ?? null,
+    })
+    .where(and(eq(orderProposals.id, proposalId), eq(orderProposals.userId, userId)));
   return { success: true as const, proposal: updated };
 }
 
-export function placeUserOrder(userId: string, proposalId: string) {
-  const database = getDatabase();
-  const row = database
-    .prepare(
-      "SELECT proposal_json, status, approval_token FROM order_proposals WHERE id = ? AND user_id = ?",
-    )
-    .get(proposalId, userId) as ProposalRow | undefined;
+export async function placeUserOrder(userId: string, proposalId: string) {
+  const [row] = await db
+    .select({
+      proposalJson: orderProposals.proposalJson,
+      status: orderProposals.status,
+      approvalToken: orderProposals.approvalToken,
+    })
+    .from(orderProposals)
+    .where(and(eq(orderProposals.id, proposalId), eq(orderProposals.userId, userId)));
   if (!row)
     return {
       success: false as const,
       error: { code: "PROPOSAL_NOT_FOUND", message: `No proposal exists with ID ${proposalId}.` },
     };
-  const existing = database
-    .prepare("SELECT id FROM orders WHERE proposal_id = ? AND user_id = ?")
-    .get(proposalId, userId) as { id: string } | undefined;
+  const [existing] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(and(eq(orders.proposalId, proposalId), eq(orders.userId, userId)));
   if (existing)
     return {
       success: false as const,
@@ -207,7 +207,7 @@ export function placeUserOrder(userId: string, proposalId: string) {
         orderId: existing.id,
       },
     };
-  if (row.status !== "approved" || !row.approval_token)
+  if (row.status !== "approved" || !row.approvalToken)
     return {
       success: false as const,
       error: {
@@ -215,8 +215,8 @@ export function placeUserOrder(userId: string, proposalId: string) {
         message: "Human approval is required before placing this order.",
       },
     };
-  const proposal = JSON.parse(row.proposal_json) as OrderProposal;
-  const current = getUserCart(userId);
+  const proposal = JSON.parse(row.proposalJson) as OrderProposal;
+  const current = await getUserCart(userId);
   if (current.updatedAt !== proposal.cart.updatedAt || current.subtotal !== proposal.cart.subtotal)
     return {
       success: false as const,
@@ -236,37 +236,38 @@ export function placeUserOrder(userId: string, proposalId: string) {
     status: "placed",
     createdAt: new Date().toISOString(),
   };
-  database.exec("BEGIN IMMEDIATE");
-  try {
-    database
-      .prepare(
-        "INSERT INTO orders (id, user_id, proposal_id, order_json, created_at) VALUES (?, ?, ?, ?, ?)",
-      )
-      .run(order.id, userId, proposalId, JSON.stringify(order), order.createdAt);
-    database
-      .prepare("UPDATE carts SET quantities_json = '{}', updated_at = ? WHERE user_id = ?")
-      .run(new Date().toISOString(), userId);
-    database.exec("COMMIT");
-  } catch (error) {
-    database.exec("ROLLBACK");
-    throw error;
-  }
+  await db.transaction(async (tx) => {
+    await tx.insert(orders).values({
+      id: order.id,
+      userId,
+      proposalId,
+      orderJson: JSON.stringify(order),
+      createdAt: order.createdAt,
+    });
+    await tx
+      .update(carts)
+      .set({ quantitiesJson: "{}", updatedAt: new Date().toISOString() })
+      .where(eq(carts.userId, userId));
+  });
   return { success: true as const, order, message: `Order ${order.id} placed.` };
 }
 
-export function listUserOrders(userId: string): Order[] {
-  return (
-    getDatabase()
-      .prepare("SELECT order_json FROM orders WHERE user_id = ? ORDER BY created_at DESC")
-      .all(userId) as OrderRow[]
-  ).map((row) => JSON.parse(row.order_json) as Order);
+export async function listUserOrders(userId: string): Promise<Order[]> {
+  const rows = await db
+    .select({ orderJson: orders.orderJson })
+    .from(orders)
+    .where(eq(orders.userId, userId))
+    .orderBy(desc(orders.createdAt));
+  return rows.map((row) => JSON.parse(row.orderJson) as Order);
 }
-export function getUserOrder(userId: string, orderId: string) {
-  const row = getDatabase()
-    .prepare("SELECT order_json FROM orders WHERE id = ? AND user_id = ?")
-    .get(orderId, userId) as OrderRow | undefined;
+
+export async function getUserOrder(userId: string, orderId: string) {
+  const [row] = await db
+    .select({ orderJson: orders.orderJson })
+    .from(orders)
+    .where(and(eq(orders.id, orderId), eq(orders.userId, userId)));
   return row
-    ? { success: true as const, order: JSON.parse(row.order_json) as Order }
+    ? { success: true as const, order: JSON.parse(row.orderJson) as Order }
     : {
         success: false as const,
         error: { code: "ORDER_NOT_FOUND", message: `No order exists with ID ${orderId}.` },

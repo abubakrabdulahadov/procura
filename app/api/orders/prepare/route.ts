@@ -9,6 +9,6 @@ export async function POST(request: Request) {
       { status: 401 },
     );
   const body = (await request.json().catch(() => ({}))) as { installmentMonths?: number };
-  const result = prepareUserOrder(user.id, body.installmentMonths);
+  const result = await prepareUserOrder(user.id, body.installmentMonths);
   return NextResponse.json(result, { status: result.success ? 200 : 400 });
 }

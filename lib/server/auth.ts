@@ -1,7 +1,9 @@
 import { createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
+import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { getDatabase } from "@/lib/server/database";
+import { db } from "@/lib/server/database";
+import { carts, users } from "@/lib/server/schema";
 import type { SessionUser } from "@/types/auth";
 
 const scrypt = promisify(scryptCallback);
@@ -16,23 +18,17 @@ function sessionSecret() {
   return value;
 }
 
-interface UserRow {
-  id: string;
-  first_name: string;
-  last_name: string;
-  username: string;
-  password_hash: string;
-  password_salt: string;
-  created_at: string;
-}
-function publicUser(user: UserRow): SessionUser {
+type UserSelect = typeof users.$inferSelect;
+
+function publicUser(user: UserSelect): SessionUser {
   return {
     id: user.id,
-    firstName: user.first_name,
-    lastName: user.last_name,
+    firstName: user.firstName,
+    lastName: user.lastName,
     username: user.username,
   };
 }
+
 function normalizeUsername(value: string) {
   return value.trim().toLowerCase();
 }
@@ -48,53 +44,49 @@ export async function createUser(input: {
   const passwordHash = Buffer.from((await scrypt(input.password, salt, 64)) as Buffer).toString(
     "hex",
   );
-  const database = getDatabase();
-  if (database.prepare("SELECT id FROM users WHERE username = ?").get(username))
-    return { success: false as const, error: "This username is already taken." };
-  const user: UserRow = {
+
+  const [existing] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.username, username));
+  if (existing) return { success: false as const, error: "This username is already taken." };
+
+  const user: UserSelect = {
     id: `user-${crypto.randomUUID()}`,
-    first_name: input.firstName.trim(),
-    last_name: input.lastName.trim(),
+    firstName: input.firstName.trim(),
+    lastName: input.lastName.trim(),
     username,
-    password_hash: passwordHash,
-    password_salt: salt,
-    created_at: new Date().toISOString(),
+    passwordHash,
+    passwordSalt: salt,
+    createdAt: new Date().toISOString(),
   };
-  database.exec("BEGIN IMMEDIATE");
+
   try {
-    database
-      .prepare(
-        "INSERT INTO users (id, first_name, last_name, username, password_hash, password_salt, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        user.id,
-        user.first_name,
-        user.last_name,
-        user.username,
-        user.password_hash,
-        user.password_salt,
-        user.created_at,
-      );
-    database
-      .prepare("INSERT INTO carts (user_id, quantities_json, updated_at) VALUES (?, '{}', ?)")
-      .run(user.id, new Date(0).toISOString());
-    database.exec("COMMIT");
-  } catch (error) {
-    database.exec("ROLLBACK");
-    if (error instanceof Error && error.message.includes("UNIQUE constraint"))
+    await db.transaction(async (tx) => {
+      await tx.insert(users).values(user);
+      await tx.insert(carts).values({
+        userId: user.id,
+        quantitiesJson: "{}",
+        updatedAt: new Date(0).toISOString(),
+      });
+    });
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message.includes("unique"))
       return { success: false as const, error: "This username is already taken." };
     throw error;
   }
+
   return { success: true as const, user: publicUser(user) };
 }
 
 export async function authenticateUser(usernameInput: string, password: string) {
-  const user = getDatabase()
-    .prepare("SELECT * FROM users WHERE username = ?")
-    .get(normalizeUsername(usernameInput)) as UserRow | undefined;
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.username, normalizeUsername(usernameInput)));
   if (!user) return null;
-  const candidate = Buffer.from((await scrypt(password, user.password_salt, 64)) as Buffer);
-  const expected = Buffer.from(user.password_hash, "hex");
+  const candidate = Buffer.from((await scrypt(password, user.passwordSalt, 64)) as Buffer);
+  const expected = Buffer.from(user.passwordHash, "hex");
   return candidate.length === expected.length && timingSafeEqual(candidate, expected)
     ? publicUser(user)
     : null;
@@ -142,7 +134,6 @@ export async function deleteSession() {
 export async function getSessionUser(): Promise<SessionUser | null> {
   const session = decodeSession((await cookies()).get(cookieName)?.value);
   if (!session) return null;
-  const user = getDatabase().prepare("SELECT * FROM users WHERE id = ?").get(session.userId) as
-    UserRow | undefined;
+  const [user] = await db.select().from(users).where(eq(users.id, session.userId));
   return user ? publicUser(user) : null;
 }

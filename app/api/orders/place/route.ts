@@ -14,6 +14,6 @@ export async function POST(request: Request) {
       { success: false, error: { code: "INVALID_INPUT", message: "proposalId is required." } },
       { status: 400 },
     );
-  const result = placeUserOrder(user.id, body.proposalId);
+  const result = await placeUserOrder(user.id, body.proposalId);
   return NextResponse.json(result, { status: result.success ? 200 : 400 });
 }

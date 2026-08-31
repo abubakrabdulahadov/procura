@@ -24,6 +24,6 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     );
-  const result = decideUserProposal(user.id, body.proposalId, decision);
+  const result = await decideUserProposal(user.id, body.proposalId, decision);
   return NextResponse.json(result, { status: result.success ? 200 : 400 });
 }

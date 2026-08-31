@@ -9,7 +9,7 @@ export async function GET() {
       { success: false, error: { code: "AUTH_REQUIRED", message: "Sign in to access your cart." } },
       { status: 401 },
     );
-  return NextResponse.json({ success: true, cart: getUserCart(user.id) });
+  return NextResponse.json({ success: true, cart: await getUserCart(user.id) });
 }
 export async function POST(request: Request) {
   const user = await getSessionUser();
@@ -31,6 +31,6 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     );
-  const result = mutateUserCart(user.id, body.action, body.productId, body.quantity);
+  const result = await mutateUserCart(user.id, body.action, body.productId, body.quantity);
   return NextResponse.json(result, { status: result.success ? 200 : 400 });
 }

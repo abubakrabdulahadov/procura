@@ -11,6 +11,6 @@ export async function GET() {
       },
       { status: 401 },
     );
-  const orders = listUserOrders(user.id);
+  const orders = await listUserOrders(user.id);
   return NextResponse.json({ success: true, orders, count: orders.length });
 }
