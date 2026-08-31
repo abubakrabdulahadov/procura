@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 interface ToolCall {
   id: number;
   name: string;
+  title: string;
   status: "running" | "done" | "error";
   ts: number;
 }
@@ -33,10 +34,13 @@ export function AgentActivity() {
       setToolsRegistered(tools.length > 0);
     };
     const onStart = (e: Event) => {
-      const { id, name } = (e as CustomEvent).detail;
+      const { id, name, title } = (e as CustomEvent).detail;
       setAgentConnected(true);
       setCalls((prev) =>
-        [{ id, name, status: "running" as const, ts: Date.now() }, ...prev].slice(0, 30),
+        [
+          { id, name, title: title || formatName(name), status: "running" as const, ts: Date.now() },
+          ...prev,
+        ].slice(0, 30),
       );
       setExpanded(true);
       clearTimeout(collapseTimer.current);
@@ -44,7 +48,9 @@ export function AgentActivity() {
     const onEnd = (e: Event) => {
       const { id, success } = (e as CustomEvent).detail;
       setCalls((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, status: success ? ("done" as const) : ("error" as const) } : c)),
+        prev.map((c) =>
+          c.id === id ? { ...c, status: success ? ("done" as const) : ("error" as const) } : c,
+        ),
       );
       scheduleCollapse();
     };
@@ -76,19 +82,6 @@ export function AgentActivity() {
 
   return (
     <div className={`agent-panel${expanded ? " agent-panel-expanded" : ""}`}>
-      <button
-        className="agent-pill"
-        onClick={() => setExpanded((p) => !p)}
-        aria-label="Toggle agent activity"
-      >
-        <span className={`agent-dot agent-dot-${status}`} />
-        <strong>AI Agent</strong>
-        {running > 0 && <span className="agent-count">{running}</span>}
-        {calls.length > 0 && !expanded && (
-          <span className="agent-peek">{formatName(calls[0].name)}</span>
-        )}
-      </button>
-
       {expanded && calls.length > 0 && (
         <div className="agent-feed">
           {calls.slice(0, 12).map((call) => (
@@ -102,11 +95,24 @@ export function AgentActivity() {
                   "✗"
                 )}
               </span>
-              <span className="agent-entry-label">{formatName(call.name)}</span>
+              <span className="agent-entry-label">{call.title}</span>
             </div>
           ))}
         </div>
       )}
+
+      <button
+        className="agent-pill"
+        onClick={() => setExpanded((p) => !p)}
+        aria-label="Toggle agent activity"
+      >
+        <span className={`agent-dot agent-dot-${status}`} />
+        <strong>AI Agent</strong>
+        {running > 0 && <span className="agent-count">{running}</span>}
+        {calls.length > 0 && !expanded && (
+          <span className="agent-peek">{calls[0].title}</span>
+        )}
+      </button>
     </div>
   );
 }

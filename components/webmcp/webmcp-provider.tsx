@@ -52,10 +52,10 @@ function emit() {
 
 let callId = 0;
 
-function emitToolStart(name: string, input: ToolInput) {
+function emitToolStart(name: string, title: string | undefined, input: ToolInput) {
   const id = ++callId;
   window.dispatchEvent(
-    new CustomEvent("webmcp:tool-start", { detail: { id, name, input } }),
+    new CustomEvent("webmcp:tool-start", { detail: { id, name, title, input } }),
   );
   return id;
 }
@@ -68,10 +68,11 @@ function emitToolEnd(id: number, name: string, success: boolean) {
 
 function traced(
   name: string,
+  title: string | undefined,
   fn: (input: ToolInput) => Promise<string>,
 ): (input: ToolInput, context: ToolExecuteContext) => Promise<string> {
   return async (input, _context) => {
-    const id = emitToolStart(name, input);
+    const id = emitToolStart(name, title, input);
     try {
       const result = await fn(input);
       const parsed = JSON.parse(result);
@@ -93,6 +94,29 @@ function json(data: unknown): string {
 }
 
 const toolDefs: ToolDef[] = [
+  {
+    name: "check_auth_status",
+    title: "Auth Status",
+    description:
+      "Check if the user is signed in. Returns user name and email if authenticated, or signed_in: false. Call this before any tool that requires authentication.",
+    inputSchema: { type: "object", properties: {} },
+    annotations: { readOnlyHint: true },
+    execute: traced("check_auth_status", "Auth Status", async () => {
+      const session = await api("/api/auth/session");
+      if (session.user) {
+        return json({
+          success: true,
+          signed_in: true,
+          user: { name: session.user.name, email: session.user.email },
+        });
+      }
+      return json({
+        success: true,
+        signed_in: false,
+        message: "User is not signed in. They need to sign in at /login before using cart or order tools.",
+      });
+    }),
+  },
   {
     name: "search_products",
     title: "Search Products",
@@ -117,7 +141,7 @@ const toolDefs: ToolDef[] = [
       },
     },
     annotations: { readOnlyHint: true },
-    execute: traced("search_products", async (input) => {
+    execute: traced("search_products", "Search Products", async (input) => {
       const { searchProducts } = await import("@/lib/procurement/products");
       const result = searchProducts({
         category: input.category as never,
@@ -152,7 +176,7 @@ const toolDefs: ToolDef[] = [
       required: ["productId"],
     },
     annotations: { readOnlyHint: true },
-    execute: traced("get_product_details", async (input) => {
+    execute: traced("get_product_details", "Product Details", async (input) => {
       const {
         getProduct,
         checkProductAvailability,
@@ -203,7 +227,7 @@ const toolDefs: ToolDef[] = [
       required: ["productId"],
     },
     annotations: { readOnlyHint: true, untrustedContentHint: true },
-    execute: traced("get_product_reviews", async (input) => {
+    execute: traced("get_product_reviews", "Product Reviews", async (input) => {
       const { getProductReviews } = await import("@/lib/procurement/product-intelligence");
       return json(getProductReviews(input.productId as string, (input.limit as number) || 5));
     }),
@@ -212,16 +236,16 @@ const toolDefs: ToolDef[] = [
     name: "view_cart",
     title: "View Cart",
     description:
-      "View shopping cart contents with items, quantities, prices, and subtotal. User must be signed in.",
+      "View shopping cart contents with items, quantities, prices, and subtotal. Requires sign-in — call check_auth_status first.",
     inputSchema: { type: "object", properties: {} },
     annotations: { readOnlyHint: true },
-    execute: traced("view_cart", async () => json(await api("/api/cart"))),
+    execute: traced("view_cart", "View Cart", async () => json(await api("/api/cart"))),
   },
   {
     name: "add_to_cart",
     title: "Add to Cart",
     description:
-      "Add a product to the cart. Stacks quantity if already present. User must be signed in.",
+      "Add a product to the cart. Stacks quantity if already present. Requires sign-in — call check_auth_status first.",
     inputSchema: {
       type: "object",
       properties: {
@@ -231,7 +255,7 @@ const toolDefs: ToolDef[] = [
       required: ["productId"],
     },
     annotations: { readOnlyHint: false },
-    execute: traced("add_to_cart", async (input) => {
+    execute: traced("add_to_cart", "Add to Cart", async (input) => {
       const result = await postJson("/api/cart", {
         action: "add",
         productId: input.productId,
@@ -245,7 +269,7 @@ const toolDefs: ToolDef[] = [
     name: "update_cart_quantity",
     title: "Update Quantity",
     description:
-      "Change quantity of a cart item. User must be signed in.",
+      "Change quantity of a cart item. Requires sign-in — call check_auth_status first.",
     inputSchema: {
       type: "object",
       properties: {
@@ -255,7 +279,7 @@ const toolDefs: ToolDef[] = [
       required: ["productId", "quantity"],
     },
     annotations: { readOnlyHint: false, idempotentHint: true },
-    execute: traced("update_cart_quantity", async (input) => {
+    execute: traced("update_cart_quantity", "Update Quantity", async (input) => {
       const result = await postJson("/api/cart", {
         action: "update",
         productId: input.productId,
@@ -269,7 +293,7 @@ const toolDefs: ToolDef[] = [
     name: "remove_from_cart",
     title: "Remove from Cart",
     description:
-      "Remove a product from the cart entirely. User must be signed in.",
+      "Remove a product from the cart entirely. Requires sign-in — call check_auth_status first.",
     inputSchema: {
       type: "object",
       properties: {
@@ -278,7 +302,7 @@ const toolDefs: ToolDef[] = [
       required: ["productId"],
     },
     annotations: { readOnlyHint: false, destructiveHint: true },
-    execute: traced("remove_from_cart", async (input) => {
+    execute: traced("remove_from_cart", "Remove from Cart", async (input) => {
       const result = await postJson("/api/cart", {
         action: "remove",
         productId: input.productId,
@@ -291,7 +315,7 @@ const toolDefs: ToolDef[] = [
     name: "place_order",
     title: "Place Order",
     description:
-      "Place an order from cart. Supports installments (3, 6, 12, 24 months). Min $100 for installments. Fees: 3/6mo 0%, 12mo 4%, 24mo 9%. User must be signed in.",
+      "Place an order from cart. Supports installments (3, 6, 12, 24 months). Min $100 for installments. Fees: 3/6mo 0%, 12mo 4%, 24mo 9%. Requires sign-in — call check_auth_status first.",
     inputSchema: {
       type: "object",
       properties: {
@@ -303,7 +327,7 @@ const toolDefs: ToolDef[] = [
       },
     },
     annotations: { readOnlyHint: false, destructiveHint: true },
-    execute: traced("place_order", async (input) => {
+    execute: traced("place_order", "Place Order", async (input) => {
       const prepared = await postJson("/api/orders/prepare", {
         installmentMonths: input.installmentMonths,
       });
@@ -326,10 +350,10 @@ const toolDefs: ToolDef[] = [
     name: "view_orders",
     title: "Order History",
     description:
-      "View all placed orders with items, totals, installment terms, status, and dates. User must be signed in.",
+      "View all placed orders with items, totals, installment terms, status, and dates. Requires sign-in — call check_auth_status first.",
     inputSchema: { type: "object", properties: {} },
     annotations: { readOnlyHint: true },
-    execute: traced("view_orders", async () => json(await api("/api/orders"))),
+    execute: traced("view_orders", "Order History", async () => json(await api("/api/orders"))),
   },
 ];
 
