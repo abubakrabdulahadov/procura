@@ -13,18 +13,23 @@ export function AuthForm({ mode }: { mode: "signup" | "login" }) {
     event.preventDefault();
     setPending(true);
     setError(null);
-    const data = new FormData(event.currentTarget);
-    const payload = Object.fromEntries(data.entries());
-    const response = await fetch(`/api/auth/${mode}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const result = await response.json();
-    setPending(false);
-    if (!response.ok) return setError(result.error ?? "Authentication failed.");
-    router.push("/");
-    router.refresh();
+    try {
+      const data = new FormData(event.currentTarget);
+      const payload = Object.fromEntries(data.entries());
+      const response = await fetch(`/api/auth/${mode}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) return setError(result?.error ?? "Authentication failed.");
+      router.push("/");
+      router.refresh();
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setPending(false);
+    }
   };
   return (
     <main className="auth-page">
