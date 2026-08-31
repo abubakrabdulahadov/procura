@@ -100,21 +100,32 @@ const publicTools: ToolDef[] = [
     name: "check_auth_status",
     title: "Auth Status",
     description:
-      "Check if the user is signed in. Returns user info if authenticated, or signed_in: false with a link to the sign-in page.",
+      "Check if the user is signed in and which page they're on. Returns auth state, user info, and currentPage.",
     inputSchema: { type: "object", properties: {} },
     annotations: { readOnlyHint: true },
     execute: traced("check_auth_status", "Auth Status", async () => {
+      const path = window.location.pathname;
+      const pageMap: Record<string, string> = {
+        "/": "catalog",
+        "/cart": "cart",
+        "/orders": "orders",
+        "/login": "login",
+        "/signup": "signup",
+      };
+      const currentPage = pageMap[path] ?? path;
       const session = await api("/api/auth/session");
       if (session.user) {
         return json({
           success: true,
           signed_in: true,
+          currentPage,
           user: { name: session.user.name, email: session.user.email },
         });
       }
       return json({
         success: true,
         signed_in: false,
+        currentPage,
         message: "User is not signed in. Use navigate_to with page 'login' so they can sign in.",
       });
     }),
