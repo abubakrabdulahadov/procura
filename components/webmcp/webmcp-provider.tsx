@@ -112,7 +112,9 @@ const publicTools: ToolDef[] = [
         "/login": "login",
         "/signup": "signup",
       };
-      const currentPage = pageMap[path] ?? path;
+      const currentPage = path.startsWith("/product/")
+        ? `product:${path.slice("/product/".length)}`
+        : pageMap[path] ?? path;
       const session = await api("/api/auth/session");
       if (session.user) {
         return json({
@@ -249,20 +251,30 @@ const publicTools: ToolDef[] = [
     name: "navigate_to",
     title: "Navigate",
     description:
-      "Navigate the user to a page in Procura. Use after adding items to cart or when the user needs to see a specific page.",
+      "Navigate the user to a page in Procura. Use after adding items to cart, when showing product details, or when the user needs to see a specific page.",
     inputSchema: {
       type: "object",
       properties: {
         page: {
           type: "string",
-          enum: ["catalog", "cart", "orders", "login", "signup"],
-          description: "Target page",
+          enum: ["catalog", "cart", "orders", "login", "signup", "product"],
+          description: "Target page. Use 'product' with productId to show a product detail page.",
+        },
+        productId: {
+          type: "string",
+          description: "Required when page is 'product'. The product ID to show.",
         },
       },
       required: ["page"],
     },
     annotations: { readOnlyHint: true },
     execute: traced("navigate_to", "Navigate", async (input) => {
+      const page = input.page as string;
+      if (page === "product") {
+        if (!input.productId) return json({ success: false, error: "productId is required for product page." });
+        window.location.href = `/product/${encodeURIComponent(input.productId as string)}`;
+        return json({ success: true, navigated_to: "product", productId: input.productId });
+      }
       const routes: Record<string, string> = {
         catalog: "/",
         cart: "/cart",
@@ -270,10 +282,10 @@ const publicTools: ToolDef[] = [
         login: "/login",
         signup: "/signup",
       };
-      const path = routes[input.page as string];
+      const path = routes[page];
       if (!path) return json({ success: false, error: "Unknown page." });
       window.location.href = path;
-      return json({ success: true, navigated_to: input.page });
+      return json({ success: true, navigated_to: page });
     }),
   },
 ];
