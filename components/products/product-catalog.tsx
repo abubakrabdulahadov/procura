@@ -20,6 +20,7 @@ export function ProductCatalog() {
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [cart, setCart] = useState(emptyCart);
   const [orderCount, setOrderCount] = useState(0);
+  const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
   const result = useMemo(
     () => searchProducts({ category: category === "all" ? undefined : category, maxPrice }),
     [category, maxPrice],
@@ -44,6 +45,43 @@ export function ProductCatalog() {
 
   useEffect(reloadCounts, [reloadCounts]);
   useWebMCPSync(reloadCounts);
+
+  useEffect(() => {
+    const onHighlight = (e: Event) => {
+      const { productIds } = (e as CustomEvent).detail as { productIds: string[] };
+      setHighlightedIds(new Set(productIds));
+      if (productIds.length > 0) {
+        requestAnimationFrame(() => {
+          const el = document.querySelector(`[data-product-id="${productIds[0]}"]`);
+          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+      }
+    };
+    window.addEventListener("webmcp:highlight", onHighlight);
+    return () => window.removeEventListener("webmcp:highlight", onHighlight);
+  }, []);
+
+  useEffect(() => {
+    (window as unknown as { __procuraPageContext?: Record<string, unknown> }).__procuraPageContext = {
+      page: "catalog",
+      totalProducts: visibleProducts.length,
+      filters: {
+        category: category === "all" ? null : category,
+        maxPrice: maxPrice ?? null,
+        query: query || null,
+      },
+      products: visibleProducts.map((p) => ({
+        id: p.id,
+        name: p.name,
+        brand: p.brand,
+        category: p.category,
+        price: p.price,
+      })),
+    };
+    return () => {
+      (window as unknown as { __procuraPageContext?: null }).__procuraPageContext = null;
+    };
+  }, [visibleProducts, category, maxPrice, query]);
 
   const addItem = async (productId: string, quantity: number) => {
     const result = await mutateCart("add", productId, quantity);
@@ -147,8 +185,9 @@ export function ProductCatalog() {
                 <div className="commerce-grid">
                   {visibleProducts.map((product) => (
                     <article
-                      className="commerce-card"
+                      className={`commerce-card${highlightedIds.has(product.id) ? " card-recommended" : ""}`}
                       key={product.id}
+                      data-product-id={product.id}
                       role="button"
                       tabIndex={0}
                       onClick={() => setSelectedProductId(product.id)}
@@ -161,6 +200,9 @@ export function ProductCatalog() {
                       <div className="commerce-media">
                         <ProductVisual product={product} />
                         <span className="category-badge">{product.category}</span>
+                        {highlightedIds.has(product.id) && (
+                          <span className="recommended-badge">Recommended</span>
+                        )}
                       </div>
                       <div className="commerce-body">
                         <p className="commerce-brand">{product.brand}</p>

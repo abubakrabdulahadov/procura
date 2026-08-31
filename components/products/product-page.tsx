@@ -58,6 +58,22 @@ export function ProductPage({ productId }: { productId: string }) {
   const availability = checkProductAvailability(productId, 1);
   const installments = getInstallmentOptions(productId, 1);
 
+  useEffect(() => {
+    (window as unknown as { __procuraPageContext?: Record<string, unknown> }).__procuraPageContext = {
+      page: "product",
+      product: {
+        id: product.id,
+        name: product.name,
+        brand: product.brand,
+        category: product.category,
+        price: product.price,
+      },
+    };
+    return () => {
+      (window as unknown as { __procuraPageContext?: null }).__procuraPageContext = null;
+    };
+  }, [product]);
+
   const addToCart = async () => {
     setAdding(true);
     const result = await mutateCart("add", product.id, 1);

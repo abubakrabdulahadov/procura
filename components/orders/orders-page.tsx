@@ -28,6 +28,25 @@ export function OrdersPage() {
   useEffect(reload, [reload]);
   useWebMCPSync(reload);
 
+  useEffect(() => {
+    (window as unknown as { __procuraPageContext?: Record<string, unknown> }).__procuraPageContext = {
+      page: "orders",
+      totalOrders: orders.length,
+      activeOrders: orders.filter((o) => o.status === "placed").length,
+      cancelledOrders: orders.filter((o) => o.status === "cancelled").length,
+      orders: orders.map((o) => ({
+        id: o.id,
+        status: o.status,
+        total: o.total,
+        itemCount: o.items.length,
+        createdAt: o.createdAt,
+      })),
+    };
+    return () => {
+      (window as unknown as { __procuraPageContext?: null }).__procuraPageContext = null;
+    };
+  }, [orders]);
+
   const cancelOrder = async (orderId: string) => {
     if (cancelling) return;
     setCancelling(orderId);

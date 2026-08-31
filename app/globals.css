@@ -1642,6 +1642,32 @@ summary:focus-visible {
   font-weight: 700;
   text-transform: capitalize;
 }
+.card-recommended {
+  border-color: rgba(34, 109, 75, 0.35) !important;
+  box-shadow:
+    0 0 0 1px rgba(34, 109, 75, 0.15),
+    0 8px 30px rgba(34, 109, 75, 0.12) !important;
+}
+.recommended-badge {
+  position: absolute;
+  z-index: 3;
+  top: 11px;
+  right: 11px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1a6b47, #2a9d68);
+  color: #fff;
+  font-size: 7px;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  box-shadow: 0 4px 14px rgba(26, 107, 71, 0.35);
+  animation: badge-glow 2.5s ease-in-out infinite;
+}
+@keyframes badge-glow {
+  0%, 100% { box-shadow: 0 4px 14px rgba(26, 107, 71, 0.35); }
+  50% { box-shadow: 0 4px 22px rgba(26, 107, 71, 0.55); }
+}
 .commerce-visual {
   width: 78%;
   height: 78%;

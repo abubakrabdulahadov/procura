@@ -54,6 +54,23 @@ export function CartPage() {
   useEffect(reload, [reload]);
   useWebMCPSync(reload);
 
+  useEffect(() => {
+    (window as unknown as { __procuraPageContext?: Record<string, unknown> }).__procuraPageContext = {
+      page: "cart",
+      itemCount: cart.itemCount,
+      subtotal: cart.subtotal,
+      items: cart.items.map((i) => ({
+        productId: i.product.id,
+        name: i.product.name,
+        quantity: i.quantity,
+        lineTotal: i.lineTotal,
+      })),
+    };
+    return () => {
+      (window as unknown as { __procuraPageContext?: null }).__procuraPageContext = null;
+    };
+  }, [cart]);
+
   const update = async (productId: string, quantity: number) => {
     const result = await mutateCart(quantity < 1 ? "remove" : "update", productId, quantity);
     if (result.success && result.cart) setCart(result.cart);

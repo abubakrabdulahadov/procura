@@ -292,6 +292,45 @@ const publicTools: ToolDef[] = [
       return json({ success: true, navigated_to: page });
     }),
   },
+  {
+    name: "highlight_products",
+    title: "Recommend Products",
+    description:
+      "Highlight products as 'Recommended' on the catalog page with a visible badge and auto-scroll to the first one. Call with an empty array to clear highlights. User must be on the catalog page.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        productIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Product IDs to highlight as recommended",
+        },
+      },
+      required: ["productIds"],
+    },
+    annotations: { readOnlyHint: true },
+    execute: traced("highlight_products", "Recommend Products", async (input) => {
+      const ids = input.productIds as string[];
+      window.dispatchEvent(
+        new CustomEvent("webmcp:highlight", { detail: { productIds: ids } }),
+      );
+      if (ids.length === 0) return json({ success: true, message: "Highlights cleared." });
+      return json({ success: true, highlighted: ids.length, productIds: ids });
+    }),
+  },
+  {
+    name: "get_page_context",
+    title: "Page Context",
+    description:
+      "Get detailed context about what the user is currently viewing — visible products, cart contents, active filters, etc. Richer than check_auth_status for understanding the user's current screen.",
+    inputSchema: { type: "object", properties: {} },
+    annotations: { readOnlyHint: true },
+    execute: traced("get_page_context", "Page Context", async () => {
+      const ctx = (window as unknown as { __procuraPageContext?: Record<string, unknown> }).__procuraPageContext;
+      if (!ctx) return json({ success: true, page: window.location.pathname, context: null });
+      return json({ success: true, ...ctx });
+    }),
+  },
 ];
 
 const authTools: ToolDef[] = [
