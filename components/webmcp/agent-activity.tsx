@@ -116,45 +116,23 @@ export function AgentActivity() {
         )}
       </button>
 
-      {expanded && (
+      {expanded && calls.length > 0 && (
         <div className="agent-feed">
-          {calls.length === 0 ? (
-            <div className="agent-feed-empty">
-              <strong>WebMCP Tools</strong>
-              <span>9 tools registered. Waiting for an AI agent to connect and start using them.</span>
-              <div className="agent-tool-list">
-                {[
-                  "search_products",
-                  "get_product_details",
-                  "get_product_reviews",
-                  "view_cart",
-                  "add_to_cart",
-                  "update_cart_quantity",
-                  "remove_from_cart",
-                  "place_order",
-                  "view_orders",
-                ].map((t) => (
-                  <code key={t}>{t}</code>
-                ))}
-              </div>
+          {calls.slice(0, 12).map((call) => (
+            <div key={call.id} className={`agent-entry agent-entry-${call.status}`}>
+              <span className="agent-entry-icon">
+                {call.status === "running" ? (
+                  <span className="agent-spinner" />
+                ) : call.status === "done" ? (
+                  "✓"
+                ) : (
+                  "✗"
+                )}
+              </span>
+              <span className="agent-entry-label">{call.label}</span>
+              <span className="agent-entry-tool">{call.name}</span>
             </div>
-          ) : (
-            calls.slice(0, 12).map((call) => (
-              <div key={call.id} className={`agent-entry agent-entry-${call.status}`}>
-                <span className="agent-entry-icon">
-                  {call.status === "running" ? (
-                    <span className="agent-spinner" />
-                  ) : call.status === "done" ? (
-                    "✓"
-                  ) : (
-                    "✗"
-                  )}
-                </span>
-                <span className="agent-entry-label">{call.label}</span>
-                <span className="agent-entry-tool">{call.name}</span>
-              </div>
-            ))
-          )}
+          ))}
         </div>
       )}
     </div>
