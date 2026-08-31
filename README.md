@@ -4,42 +4,13 @@ Procura is a modern procurement marketplace for workplace purchasing. It combine
 product catalog with product intelligence, account-based carts, and a straightforward order
 flow.
 
-## Features
+## What You Can Do
 
-- Products across technology, office supplies, furniture, and facilities
-- Catalog search, category filters, and price filters
-- Product details, specifications, reviews, availability, and installment options
-- Account creation and session-based authentication
-- Persistent user carts and order history
-- Responsive custom interface for desktop and mobile
-
-## Tech Stack
-
-- Next.js 16
-- React 19
-- TypeScript
-- SQLite
-- Tailwind CSS
-- pnpm
-
-## Getting Started
-
-Install dependencies and start the development server:
-
-```bash
-pnpm install
-pnpm dev
-```
-
-Open [http://localhost:3000](http://localhost:3000).
-
-## Commands
-
-- `pnpm dev` — run the development server
-- `pnpm build` — create a production build
-- `pnpm lint` — run ESLint
-- `pnpm format` — format the codebase with Prettier
-- `pnpm format:check` — verify formatting
+- Browse technology, office supplies, furniture, and facilities
+- Search and filter the catalog by category and price
+- Review product specifications, ratings, availability, and payment options
+- Create an account and maintain a personal cart
+- Place orders and view order history
 
 ## License
 
