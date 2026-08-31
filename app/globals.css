@@ -3340,6 +3340,21 @@ summary:focus-visible {
 .orders-trigger {
   text-decoration: none;
 }
+.cart-trigger.nav-active,
+.orders-trigger.nav-active {
+  background: #214e3b;
+  border-color: #214e3b;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(33, 78, 59, 0.28);
+}
+.cart-trigger.nav-active b {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+.orders-trigger.nav-active b {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
 .standalone-page {
   max-width: 1240px;
   margin: 0 auto;
@@ -3548,6 +3563,83 @@ summary:focus-visible {
   font-size: 7px;
   line-height: 1.5;
   text-align: center;
+}
+.cart-summary > button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.checkout-back {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 14px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #687970;
+  font-size: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.checkout-back svg {
+  width: 14px;
+  height: 14px;
+}
+.checkout-back:hover {
+  color: #214e3b;
+}
+.checkout-plans {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 12px;
+}
+.checkout-plan {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid rgba(63, 95, 80, 0.13);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.checkout-plan strong {
+  font-size: 8.5px;
+  font-weight: 680;
+  color: #365348;
+}
+.checkout-plan small {
+  font-size: 7px;
+  color: #687970;
+}
+.checkout-plan:hover:not(:disabled) {
+  border-color: rgba(33, 78, 59, 0.35);
+  background: rgba(255, 255, 255, 0.8);
+}
+.checkout-plan.active {
+  border-color: #214e3b;
+  background: #edf5f0;
+}
+.checkout-plan.active strong {
+  color: #214e3b;
+}
+.checkout-plan:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.cart-order-error {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 8px;
+  font-weight: 600;
 }
 .orders-page-list {
   margin-top: 24px;

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
+import { ArrowLeft, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { CommerceHeader } from "@/components/layout/commerce-header";
 import { ProductVisual } from "@/components/products/product-visual";
 import {
@@ -14,7 +14,15 @@ import {
   placeOrderRequest,
   prepareOrderRequest,
 } from "@/lib/procurement/client";
-import { useEffect } from "react";
+
+type InstallmentOption = 3 | 6 | 12 | 24;
+const installmentOptions: { months: InstallmentOption | null; label: string; rate: number }[] = [
+  { months: null, label: "Single payment", rate: 0 },
+  { months: 3, label: "3 months", rate: 0 },
+  { months: 6, label: "6 months", rate: 0 },
+  { months: 12, label: "12 months", rate: 0.04 },
+  { months: 24, label: "24 months", rate: 0.09 },
+];
 
 export function CartPage() {
   const router = useRouter();
@@ -23,6 +31,13 @@ export function CartPage() {
   const [authRequired, setAuthRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
+  const [checkout, setCheckout] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<InstallmentOption | null>(null);
+
+  const fee = Number((cart.subtotal * (installmentOptions.find((o) => o.months === selectedPlan)?.rate ?? 0)).toFixed(2));
+  const total = Number((cart.subtotal + fee).toFixed(2));
+  const eligible = cart.subtotal >= 100;
+
   useEffect(() => {
     void Promise.all([fetchCart(), fetchOrders()])
       .then(([cartResult, orderResult]) => {
@@ -32,17 +47,19 @@ export function CartPage() {
       })
       .catch(() => setError("Could not load cart data."));
   }, []);
+
   const update = async (productId: string, quantity: number) => {
     const result = await mutateCart(quantity < 1 ? "remove" : "update", productId, quantity);
     if (result.success && result.cart) setCart(result.cart);
     else setError(result.error?.message ?? "Cart update failed.");
   };
-  const place = async () => {
+
+  const confirmOrder = async () => {
     if (placing) return;
     setPlacing(true);
     setError(null);
     try {
-      const prepared = await prepareOrderRequest();
+      const prepared = await prepareOrderRequest(selectedPlan ?? undefined);
       if (!prepared.success || !prepared.proposal)
         return setError(prepared.error?.message ?? "Could not prepare order.");
       const approved = await approveOrderRequest(prepared.proposal.id);
@@ -58,6 +75,7 @@ export function CartPage() {
       setPlacing(false);
     }
   };
+
   return (
     <div className="app-shell">
       <div className="app-main">
@@ -125,30 +143,103 @@ export function CartPage() {
                   </article>
                 ))}
               </section>
-              <aside className="cart-summary">
-                <span>Order summary</span>
-                <p>
-                  <span>Items</span>
-                  <strong>{cart.itemCount}</strong>
-                </p>
-                <p>
-                  <span>Subtotal</span>
-                  <strong>${cart.subtotal.toFixed(2)}</strong>
-                </p>
-                <div>
-                  <span>Total</span>
-                  <strong>${cart.subtotal.toFixed(2)}</strong>
-                </div>
-                {error && (
-                  <p className="cart-order-error" role="alert">
-                    {error}
+
+              {!checkout ? (
+                <aside className="cart-summary">
+                  <span>Order summary</span>
+                  <p>
+                    <span>Items</span>
+                    <strong>{cart.itemCount}</strong>
                   </p>
-                )}
-                <button onClick={place} disabled={placing}>
-                  {placing ? "Placing order…" : "Place order"}
-                </button>
-                <small>Placing confirms this cart and creates the order immediately.</small>
-              </aside>
+                  <p>
+                    <span>Subtotal</span>
+                    <strong>${cart.subtotal.toFixed(2)}</strong>
+                  </p>
+                  <div>
+                    <span>Total</span>
+                    <strong>${cart.subtotal.toFixed(2)}</strong>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setCheckout(true);
+                      setError(null);
+                      setSelectedPlan(null);
+                    }}
+                  >
+                    Place order
+                  </button>
+                  <small>You will choose payment terms before confirming.</small>
+                </aside>
+              ) : (
+                <aside className="cart-summary checkout-step">
+                  <button
+                    className="checkout-back"
+                    onClick={() => {
+                      setCheckout(false);
+                      setError(null);
+                    }}
+                  >
+                    <ArrowLeft /> Back to cart
+                  </button>
+                  <span>Payment method</span>
+                  <div className="checkout-plans">
+                    {installmentOptions.map((option) => {
+                      const disabled = option.months !== null && !eligible;
+                      const active = selectedPlan === option.months;
+                      return (
+                        <button
+                          key={option.months ?? "single"}
+                          className={`checkout-plan ${active ? "active" : ""}`}
+                          disabled={disabled}
+                          onClick={() => setSelectedPlan(option.months)}
+                        >
+                          <strong>{option.label}</strong>
+                          {option.rate > 0 ? (
+                            <small>{(option.rate * 100).toFixed(0)}% fee</small>
+                          ) : option.months ? (
+                            <small>No fee</small>
+                          ) : null}
+                          {disabled && <small>Min. $100</small>}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <p>
+                    <span>Subtotal</span>
+                    <strong>${cart.subtotal.toFixed(2)}</strong>
+                  </p>
+                  {fee > 0 && (
+                    <p>
+                      <span>Installment fee</span>
+                      <strong>${fee.toFixed(2)}</strong>
+                    </p>
+                  )}
+                  {selectedPlan && (
+                    <p>
+                      <span>Monthly payment</span>
+                      <strong>${(total / selectedPlan).toFixed(2)}/mo</strong>
+                    </p>
+                  )}
+                  <div>
+                    <span>Total</span>
+                    <strong>${total.toFixed(2)}</strong>
+                  </div>
+                  {error && (
+                    <p className="cart-order-error" role="alert">
+                      {error}
+                    </p>
+                  )}
+                  <button onClick={confirmOrder} disabled={placing}>
+                    {placing ? "Placing order…" : "Confirm order"}
+                  </button>
+                  <small>
+                    {selectedPlan
+                      ? `${selectedPlan} monthly payments of $${(total / selectedPlan).toFixed(2)}`
+                      : "Single payment — no additional fees"}
+                  </small>
+                </aside>
+              )}
             </div>
           )}
         </main>

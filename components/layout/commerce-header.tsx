@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { LogOut, ReceiptText, ShoppingCart } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { SessionUser } from "@/types/auth";
 
 export function CommerceHeader({
@@ -14,6 +14,7 @@ export function CommerceHeader({
   orderCount: number;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<SessionUser | null | undefined>(undefined);
   useEffect(() => {
     void fetch("/api/auth/session")
@@ -36,18 +37,20 @@ export function CommerceHeader({
       </Link>
       <div className="commerce-topbar-actions">
         <Link
-          className="cart-trigger"
+          className={`cart-trigger${pathname === "/cart" ? " nav-active" : ""}`}
           href="/cart"
           aria-label={`Open cart with ${cartCount} items`}
+          aria-current={pathname === "/cart" ? "page" : undefined}
         >
           <ShoppingCart aria-hidden="true" />
           <span>Cart</span>
           {cartCount > 0 && <b>{cartCount}</b>}
         </Link>
         <Link
-          className="orders-trigger"
+          className={`orders-trigger${pathname.startsWith("/orders") ? " nav-active" : ""}`}
           href="/orders"
           aria-label={`Open orders with ${orderCount} orders`}
+          aria-current={pathname.startsWith("/orders") ? "page" : undefined}
         >
           <ReceiptText aria-hidden="true" />
           <span>Orders</span>
