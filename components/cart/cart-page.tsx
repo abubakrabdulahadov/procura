@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { CommerceHeader } from "@/components/layout/commerce-header";
@@ -14,6 +14,7 @@ import {
   placeOrderRequest,
   prepareOrderRequest,
 } from "@/lib/procurement/client";
+import { useWebMCPSync } from "@/lib/webmcp/use-sync";
 
 type InstallmentOption = 3 | 6 | 12 | 24;
 const installmentOptions: { months: InstallmentOption | null; label: string; rate: number }[] = [
@@ -38,7 +39,7 @@ export function CartPage() {
   const total = Number((cart.subtotal + fee).toFixed(2));
   const eligible = cart.subtotal >= 100;
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     void Promise.all([fetchCart(), fetchOrders()])
       .then(([cartResult, orderResult]) => {
         if (cartResult.success && cartResult.cart) setCart(cartResult.cart);
@@ -47,6 +48,9 @@ export function CartPage() {
       })
       .catch(() => setError("Could not load cart data."));
   }, []);
+
+  useEffect(reload, [reload]);
+  useWebMCPSync(reload);
 
   const update = async (productId: string, quantity: number) => {
     const result = await mutateCart(quantity < 1 ? "remove" : "update", productId, quantity);

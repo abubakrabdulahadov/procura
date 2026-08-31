@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
 import { CommerceHeader } from "@/components/layout/commerce-header";
@@ -9,6 +9,7 @@ import { ProductDetail } from "@/components/products/product-detail";
 import { ProductVisual } from "@/components/products/product-visual";
 import { emptyCart, fetchCart, fetchOrders, mutateCart } from "@/lib/procurement/client";
 import { searchProducts } from "@/lib/procurement/products";
+import { useWebMCPSync } from "@/lib/webmcp/use-sync";
 import type { ProductCategory } from "@/types/procurement";
 
 export function ProductCatalog() {
@@ -32,7 +33,7 @@ export function ProductCatalog() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [query, result]);
 
-  useEffect(() => {
+  const reloadCounts = useCallback(() => {
     void Promise.all([fetchCart(), fetchOrders()])
       .then(([cartResult, ordersResult]) => {
         if (cartResult.success && cartResult.cart) setCart(cartResult.cart);
@@ -40,6 +41,9 @@ export function ProductCatalog() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(reloadCounts, [reloadCounts]);
+  useWebMCPSync(reloadCounts);
 
   const addItem = async (productId: string, quantity: number) => {
     const result = await mutateCart("add", productId, quantity);

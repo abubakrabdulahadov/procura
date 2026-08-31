@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { WebMCPProvider } from "@/components/webmcp/webmcp-provider";
+import { AgentActivity } from "@/components/webmcp/agent-activity";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,7 +11,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <WebMCPProvider />
+        <AgentActivity />
+        {children}
+      </body>
     </html>
   );
 }
