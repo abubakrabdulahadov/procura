@@ -9,7 +9,11 @@ export const emptyCart: Cart = {
 };
 async function jsonRequest(url: string, init?: RequestInit) {
   const response = await fetch(url, init);
-  return { response, data: await response.json() };
+  const data = await response.json().catch(() => ({
+    success: false,
+    error: { code: "PARSE_ERROR", message: "Server returned an invalid response." },
+  }));
+  return { response, data };
 }
 export async function fetchCart() {
   return (await jsonRequest("/api/cart")).data as {

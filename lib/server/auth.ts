@@ -71,7 +71,8 @@ export async function createUser(input: {
       });
     });
   } catch (error: unknown) {
-    if (error instanceof Error && error.message.includes("unique"))
+    const code = error && typeof error === "object" && "code" in error ? (error as { code: string }).code : "";
+    if (code === "23505")
       return { success: false as const, error: "This username is already taken." };
     throw error;
   }

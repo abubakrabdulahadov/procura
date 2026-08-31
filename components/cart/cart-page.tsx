@@ -159,6 +159,11 @@ export function CartPage() {
                     <span>Total</span>
                     <strong>${cart.subtotal.toFixed(2)}</strong>
                   </div>
+                  {error && (
+                    <p className="cart-order-error" role="alert">
+                      {error}
+                    </p>
+                  )}
                   <button
                     onClick={() => {
                       setCheckout(true);

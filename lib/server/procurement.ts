@@ -113,6 +113,14 @@ export async function prepareUserOrder(userId: string, installmentMonths?: numbe
         message: "installmentMonths must be 3, 6, 12, or 24.",
       },
     };
+  if (installmentMonths !== undefined && cart.subtotal < 100)
+    return {
+      success: false as const,
+      error: {
+        code: "INVALID_INSTALLMENT_TERM",
+        message: "Installment plans require a minimum order of $100.",
+      },
+    };
   const rate = installmentMonths === 12 ? 0.04 : installmentMonths === 24 ? 0.09 : 0;
   const paymentFee = Number((cart.subtotal * rate).toFixed(2));
   const ranges = cart.items
