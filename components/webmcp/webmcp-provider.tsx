@@ -2,19 +2,22 @@
 
 import { useEffect } from "react";
 
-declare global {
-  interface Navigator {
-    modelContext?: {
-      registerTool: (tool: {
-        name: string;
-        description: string;
-        inputSchema?: Record<string, unknown>;
-        annotations?: { readOnlyHint?: boolean };
-        execute: (input: Record<string, unknown>) => Promise<unknown>;
-      }) => void;
-      unregisterTool: (name: string) => void;
-    };
-  }
+interface ModelContext {
+  registerTool: (tool: ToolDef) => void;
+  unregisterTool: (name: string) => void;
+}
+
+interface ToolDef {
+  name: string;
+  description: string;
+  inputSchema?: Record<string, unknown>;
+  execute: (input: Record<string, unknown>) => unknown;
+}
+
+function getModelContext(): ModelContext | null {
+  const doc = document as unknown as { modelContext?: ModelContext };
+  const nav = navigator as unknown as { modelContext?: ModelContext };
+  return doc.modelContext ?? nav.modelContext ?? null;
 }
 
 async function api(url: string, init?: RequestInit) {
@@ -53,14 +56,15 @@ function emitToolEnd(id: number, name: string, success: boolean) {
 function traced(
   name: string,
   fn: (input: Record<string, unknown>) => Promise<unknown>,
-): (input: Record<string, unknown>) => Promise<unknown> {
+): (input: Record<string, unknown>) => unknown {
   return async (input) => {
     const id = emitToolStart(name, input);
     try {
       const result = await fn(input);
-      const ok = result && typeof result === "object" && "success" in result
-        ? (result as { success: boolean }).success !== false
-        : true;
+      const ok =
+        result && typeof result === "object" && "success" in result
+          ? (result as { success: boolean }).success !== false
+          : true;
       emitToolEnd(id, name, ok);
       return result;
     } catch (err) {
@@ -70,7 +74,7 @@ function traced(
   };
 }
 
-const toolDefs: Parameters<NonNullable<Navigator["modelContext"]>["registerTool"]>[0][] = [
+const toolDefs: ToolDef[] = [
   {
     name: "search_products",
     description:
@@ -93,7 +97,6 @@ const toolDefs: Parameters<NonNullable<Navigator["modelContext"]>["registerTool"
         },
       },
     },
-    annotations: { readOnlyHint: true },
     execute: traced("search_products", async (input) => {
       const { searchProducts } = await import("@/lib/procurement/products");
       const result = searchProducts({
@@ -127,7 +130,6 @@ const toolDefs: Parameters<NonNullable<Navigator["modelContext"]>["registerTool"
       },
       required: ["productId"],
     },
-    annotations: { readOnlyHint: true },
     execute: traced("get_product_details", async (input) => {
       const {
         getProduct,
@@ -177,7 +179,6 @@ const toolDefs: Parameters<NonNullable<Navigator["modelContext"]>["registerTool"
       },
       required: ["productId"],
     },
-    annotations: { readOnlyHint: true },
     execute: traced("get_product_reviews", async (input) => {
       const { getProductReviews } = await import("@/lib/procurement/product-intelligence");
       return getProductReviews(input.productId as string, (input.limit as number) || 5);
@@ -188,7 +189,6 @@ const toolDefs: Parameters<NonNullable<Navigator["modelContext"]>["registerTool"
     description:
       "View the current shopping cart contents. Returns each item with product details, quantity, unit price, line total, and the cart subtotal. The user must be signed in.",
     inputSchema: { type: "object", properties: {} },
-    annotations: { readOnlyHint: true },
     execute: traced("view_cart", async () => api("/api/cart")),
   },
   {
@@ -293,14 +293,13 @@ const toolDefs: Parameters<NonNullable<Navigator["modelContext"]>["registerTool"
     description:
       "View the user's complete order history. Returns all placed orders with items, subtotal, installment terms, fees, total, status, and creation date. The user must be signed in.",
     inputSchema: { type: "object", properties: {} },
-    annotations: { readOnlyHint: true },
     execute: traced("view_orders", async () => api("/api/orders")),
   },
 ];
 
 export function WebMCPProvider() {
   useEffect(() => {
-    const mc = navigator.modelContext;
+    const mc = getModelContext();
     if (!mc) return;
 
     const registered: string[] = [];

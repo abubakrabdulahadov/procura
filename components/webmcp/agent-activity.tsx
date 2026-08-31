@@ -78,7 +78,8 @@ export function AgentActivity() {
     window.addEventListener("webmcp:tool-start", onStart);
     window.addEventListener("webmcp:tool-end", onEnd);
 
-    if ("modelContext" in navigator) setToolsRegistered(true);
+    if ("modelContext" in document || "modelContext" in navigator)
+      setToolsRegistered(true);
 
     return () => {
       window.removeEventListener("webmcp:ready", onReady);
