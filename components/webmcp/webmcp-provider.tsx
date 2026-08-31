@@ -2,22 +2,35 @@
 
 import { useEffect } from "react";
 
-interface ModelContext {
-  registerTool: (tool: ToolDef) => void;
-  unregisterTool: (name: string) => void;
+interface ToolInput {
+  [key: string]: unknown;
+}
+
+interface ToolExecuteContext {
+  signal: AbortSignal;
 }
 
 interface ToolDef {
   name: string;
+  title?: string;
   description: string;
-  inputSchema?: Record<string, unknown>;
-  execute: (input: Record<string, unknown>) => unknown;
+  inputSchema: Record<string, unknown>;
+  annotations?: {
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    idempotentHint?: boolean;
+    untrustedContentHint?: boolean;
+  };
+  execute: (input: ToolInput, context: ToolExecuteContext) => Promise<string>;
 }
 
-function getModelContext(): ModelContext | null {
-  const doc = document as unknown as { modelContext?: ModelContext };
-  const nav = navigator as unknown as { modelContext?: ModelContext };
-  return doc.modelContext ?? nav.modelContext ?? null;
+interface ToolOptions {
+  signal?: AbortSignal;
+  exposedTo?: string[];
+}
+
+interface ModelContext {
+  registerTool: (tool: ToolDef, options?: ToolOptions) => Promise<void>;
 }
 
 async function api(url: string, init?: RequestInit) {
@@ -25,7 +38,7 @@ async function api(url: string, init?: RequestInit) {
   return res.json().catch(() => ({ success: false, error: "Server error" }));
 }
 
-function postJson(url: string, body: Record<string, unknown>) {
+async function postJson(url: string, body: Record<string, unknown>) {
   return api(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -39,7 +52,7 @@ function emit() {
 
 let callId = 0;
 
-function emitToolStart(name: string, input: Record<string, unknown>) {
+function emitToolStart(name: string, input: ToolInput) {
   const id = ++callId;
   window.dispatchEvent(
     new CustomEvent("webmcp:tool-start", { detail: { id, name, input } }),
@@ -55,15 +68,16 @@ function emitToolEnd(id: number, name: string, success: boolean) {
 
 function traced(
   name: string,
-  fn: (input: Record<string, unknown>) => Promise<unknown>,
-): (input: Record<string, unknown>) => unknown {
-  return async (input) => {
+  fn: (input: ToolInput) => Promise<string>,
+): (input: ToolInput, context: ToolExecuteContext) => Promise<string> {
+  return async (input, _context) => {
     const id = emitToolStart(name, input);
     try {
       const result = await fn(input);
+      const parsed = JSON.parse(result);
       const ok =
-        result && typeof result === "object" && "success" in result
-          ? (result as { success: boolean }).success !== false
+        parsed && typeof parsed === "object" && "success" in parsed
+          ? parsed.success !== false
           : true;
       emitToolEnd(id, name, ok);
       return result;
@@ -74,11 +88,16 @@ function traced(
   };
 }
 
+function json(data: unknown): string {
+  return JSON.stringify(data);
+}
+
 const toolDefs: ToolDef[] = [
   {
     name: "search_products",
+    title: "Search Products",
     description:
-      "Search the Procura procurement catalog. Returns products with ID, name, brand, category, price, and specs. Use filters to narrow results. Call without filters to see all 53 products across 6 categories: monitor, laptop, accessory, office, furniture, facilities.",
+      "Search the Procura procurement catalog. Returns products with ID, name, brand, category, price, and specs. Use filters to narrow results.",
     inputSchema: {
       type: "object",
       properties: {
@@ -93,10 +112,11 @@ const toolDefs: ToolDef[] = [
         },
         usbC: {
           type: "boolean",
-          description: "Filter for USB-C connectivity support",
+          description: "USB-C connectivity filter",
         },
       },
     },
+    annotations: { readOnlyHint: true },
     execute: traced("search_products", async (input) => {
       const { searchProducts } = await import("@/lib/procurement/products");
       const result = searchProducts({
@@ -104,8 +124,8 @@ const toolDefs: ToolDef[] = [
         maxPrice: input.maxPrice as number | undefined,
         usbC: input.usbC as boolean | undefined,
       });
-      if (!result.success) return result;
-      return {
+      if (!result.success) return json(result);
+      return json({
         success: true,
         count: result.count,
         products: result.products.map((p) => ({
@@ -116,20 +136,22 @@ const toolDefs: ToolDef[] = [
           price: p.price,
           specs: p.specs,
         })),
-      };
+      });
     }),
   },
   {
     name: "get_product_details",
+    title: "Product Details",
     description:
-      "Get complete details for a single product by its ID. Returns full specs, customer rating, review count, purchase count, stock availability, delivery estimate, and installment payment plan options with fees.",
+      "Get full details for a product by ID. Returns specs, rating, reviews, stock, delivery, and installment options.",
     inputSchema: {
       type: "object",
       properties: {
-        productId: { type: "string", description: "The product ID (e.g. 'dell-u2724de')" },
+        productId: { type: "string", description: "Product ID" },
       },
       required: ["productId"],
     },
+    annotations: { readOnlyHint: true },
     execute: traced("get_product_details", async (input) => {
       const {
         getProduct,
@@ -137,10 +159,10 @@ const toolDefs: ToolDef[] = [
         getInstallmentOptions,
       } = await import("@/lib/procurement/product-intelligence");
       const detail = getProduct(input.productId as string);
-      if (!detail.success) return detail;
+      if (!detail.success) return json(detail);
       const avail = checkProductAvailability(input.productId as string, 1);
       const installments = getInstallmentOptions(input.productId as string, 1);
-      return {
+      return json({
         success: true,
         product: {
           id: detail.product.id,
@@ -164,45 +186,51 @@ const toolDefs: ToolDef[] = [
             ? { eligible: installments.eligible, plans: installments.plans }
             : { eligible: false, plans: [] },
         },
-      };
+      });
     }),
   },
   {
     name: "get_product_reviews",
+    title: "Product Reviews",
     description:
-      "Get customer reviews for a product. Returns star ratings (1-5), review title, body text, author name, and whether it is a verified purchase.",
+      "Get customer reviews for a product. Returns star ratings, title, body, author, and verified purchase status.",
     inputSchema: {
       type: "object",
       properties: {
-        productId: { type: "string", description: "The product ID" },
-        limit: { type: "number", description: "Number of reviews to return (1-10, default 5)" },
+        productId: { type: "string", description: "Product ID" },
+        limit: { type: "number", description: "Reviews to return (1-10, default 5)" },
       },
       required: ["productId"],
     },
+    annotations: { readOnlyHint: true, untrustedContentHint: true },
     execute: traced("get_product_reviews", async (input) => {
       const { getProductReviews } = await import("@/lib/procurement/product-intelligence");
-      return getProductReviews(input.productId as string, (input.limit as number) || 5);
+      return json(getProductReviews(input.productId as string, (input.limit as number) || 5));
     }),
   },
   {
     name: "view_cart",
+    title: "View Cart",
     description:
-      "View the current shopping cart contents. Returns each item with product details, quantity, unit price, line total, and the cart subtotal. The user must be signed in.",
+      "View shopping cart contents with items, quantities, prices, and subtotal. User must be signed in.",
     inputSchema: { type: "object", properties: {} },
-    execute: traced("view_cart", async () => api("/api/cart")),
+    annotations: { readOnlyHint: true },
+    execute: traced("view_cart", async () => json(await api("/api/cart"))),
   },
   {
     name: "add_to_cart",
+    title: "Add to Cart",
     description:
-      "Add a product to the shopping cart. If the product is already in the cart, the quantity is added to the existing amount. The user must be signed in.",
+      "Add a product to the cart. Stacks quantity if already present. User must be signed in.",
     inputSchema: {
       type: "object",
       properties: {
-        productId: { type: "string", description: "The product ID to add" },
-        quantity: { type: "number", description: "Quantity to add (default 1)" },
+        productId: { type: "string", description: "Product ID to add" },
+        quantity: { type: "number", description: "Quantity (default 1)" },
       },
       required: ["productId"],
     },
+    annotations: { readOnlyHint: false },
     execute: traced("add_to_cart", async (input) => {
       const result = await postJson("/api/cart", {
         action: "add",
@@ -210,21 +238,23 @@ const toolDefs: ToolDef[] = [
         quantity: (input.quantity as number) || 1,
       });
       emit();
-      return result;
+      return json(result);
     }),
   },
   {
     name: "update_cart_quantity",
+    title: "Update Quantity",
     description:
-      "Change the quantity of a product already in the cart. The user must be signed in.",
+      "Change quantity of a cart item. User must be signed in.",
     inputSchema: {
       type: "object",
       properties: {
-        productId: { type: "string", description: "The product ID in the cart" },
-        quantity: { type: "number", description: "New quantity (must be 1 or more)" },
+        productId: { type: "string", description: "Product ID in cart" },
+        quantity: { type: "number", description: "New quantity (min 1)" },
       },
       required: ["productId", "quantity"],
     },
+    annotations: { readOnlyHint: false, idempotentHint: true },
     execute: traced("update_cart_quantity", async (input) => {
       const result = await postJson("/api/cart", {
         action: "update",
@@ -232,96 +262,96 @@ const toolDefs: ToolDef[] = [
         quantity: input.quantity,
       });
       emit();
-      return result;
+      return json(result);
     }),
   },
   {
     name: "remove_from_cart",
+    title: "Remove from Cart",
     description:
-      "Remove a product from the cart entirely. The user must be signed in.",
+      "Remove a product from the cart entirely. User must be signed in.",
     inputSchema: {
       type: "object",
       properties: {
-        productId: { type: "string", description: "The product ID to remove" },
+        productId: { type: "string", description: "Product ID to remove" },
       },
       required: ["productId"],
     },
+    annotations: { readOnlyHint: false, destructiveHint: true },
     execute: traced("remove_from_cart", async (input) => {
       const result = await postJson("/api/cart", {
         action: "remove",
         productId: input.productId,
       });
       emit();
-      return result;
+      return json(result);
     }),
   },
   {
     name: "place_order",
+    title: "Place Order",
     description:
-      "Place an order from the current cart contents. Supports single payment or installment plans (3, 6, 12, or 24 months). Installments require minimum $100 cart total. Fees: 3/6 months 0%, 12 months 4%, 24 months 9%. The full order flow (prepare, approve, place) runs automatically. The user must be signed in.",
+      "Place an order from cart. Supports installments (3, 6, 12, 24 months). Min $100 for installments. Fees: 3/6mo 0%, 12mo 4%, 24mo 9%. User must be signed in.",
     inputSchema: {
       type: "object",
       properties: {
         installmentMonths: {
           type: "number",
           enum: [3, 6, 12, 24],
-          description: "Installment duration in months. Omit for single payment.",
+          description: "Installment months. Omit for single payment.",
         },
       },
     },
+    annotations: { readOnlyHint: false, destructiveHint: true },
     execute: traced("place_order", async (input) => {
       const prepared = await postJson("/api/orders/prepare", {
         installmentMonths: input.installmentMonths,
       });
-      if (!prepared.success) return prepared;
+      if (!prepared.success) return json(prepared);
 
       const approved = await postJson("/api/orders/approve", {
         proposalId: prepared.proposal.id,
         decision: "approve",
       });
-      if (!approved.success) return approved;
+      if (!approved.success) return json(approved);
 
       const placed = await postJson("/api/orders/place", {
         proposalId: approved.proposal.id,
       });
       emit();
-      return placed;
+      return json(placed);
     }),
   },
   {
     name: "view_orders",
+    title: "Order History",
     description:
-      "View the user's complete order history. Returns all placed orders with items, subtotal, installment terms, fees, total, status, and creation date. The user must be signed in.",
+      "View all placed orders with items, totals, installment terms, status, and dates. User must be signed in.",
     inputSchema: { type: "object", properties: {} },
-    execute: traced("view_orders", async () => api("/api/orders")),
+    annotations: { readOnlyHint: true },
+    execute: traced("view_orders", async () => json(await api("/api/orders"))),
   },
 ];
 
 export function WebMCPProvider() {
   useEffect(() => {
-    const mc = getModelContext();
+    const mc = (document as unknown as { modelContext?: ModelContext }).modelContext;
     if (!mc) return;
 
-    const registered: string[] = [];
+    const controller = new AbortController();
+
     for (const tool of toolDefs) {
-      try {
-        mc.registerTool(tool);
-        registered.push(tool.name);
-      } catch {
-        // tool may already exist from HMR
-      }
+      mc.registerTool(tool, { signal: controller.signal }).catch(() => {});
     }
 
-    window.dispatchEvent(new CustomEvent("webmcp:ready", { detail: { tools: registered } }));
+    window.dispatchEvent(
+      new CustomEvent("webmcp:ready", {
+        detail: { tools: toolDefs.map((t) => t.name) },
+      }),
+    );
 
     return () => {
-      for (const name of registered) {
-        try {
-          mc.unregisterTool(name);
-        } catch {
-          // already cleaned up
-        }
-      }
+      controller.abort();
     };
   }, []);
 
