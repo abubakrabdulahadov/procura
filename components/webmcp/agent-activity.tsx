@@ -97,6 +97,8 @@ export function AgentActivity() {
       ? "ready"
       : "idle";
 
+  if (!toolsRegistered && !agentConnected) return null;
+
   return (
     <div className={`agent-panel${expanded ? " agent-panel-expanded" : ""}`}>
       <button
@@ -106,7 +108,6 @@ export function AgentActivity() {
       >
         <span className={`agent-dot agent-dot-${status}`} />
         <strong>WebMCP</strong>
-        {status === "idle" && <span className="agent-status-text">Standby</span>}
         {status === "ready" && <span className="agent-status-text">9 tools ready</span>}
         {status === "connected" && <span className="agent-status-text">Agent connected</span>}
         {running > 0 && <span className="agent-count">{running}</span>}
@@ -120,11 +121,7 @@ export function AgentActivity() {
           {calls.length === 0 ? (
             <div className="agent-feed-empty">
               <strong>WebMCP Tools</strong>
-              <span>
-                {toolsRegistered
-                  ? "9 tools registered. Waiting for an AI agent to connect and start using them."
-                  : "WebMCP is not available in this browser. Use a WebMCP-compatible browser to connect an AI agent."}
-              </span>
+              <span>9 tools registered. Waiting for an AI agent to connect and start using them.</span>
               <div className="agent-tool-list">
                 {[
                   "search_products",
