@@ -97,7 +97,7 @@ export function AgentActivity() {
       ? "ready"
       : "idle";
 
-  if (!toolsRegistered && !agentConnected) return null;
+  if (!agentConnected) return null;
 
   return (
     <div className={`agent-panel${expanded ? " agent-panel-expanded" : ""}`}>
@@ -107,9 +107,7 @@ export function AgentActivity() {
         aria-label="Toggle agent activity"
       >
         <span className={`agent-dot agent-dot-${status}`} />
-        <strong>WebMCP</strong>
-        {status === "ready" && <span className="agent-status-text">9 tools ready</span>}
-        {status === "connected" && <span className="agent-status-text">Agent connected</span>}
+        <strong>AI Agent</strong>
         {running > 0 && <span className="agent-count">{running}</span>}
         {calls.length > 0 && !expanded && (
           <span className="agent-peek">{calls[0].label}</span>
