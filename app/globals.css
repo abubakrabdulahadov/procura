@@ -2743,6 +2743,39 @@ summary:focus-visible {
   color: #75857d;
   font-size: 9px;
 }
+.detail-section-toggle {
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.detail-section-toggle > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.detail-section-toggle h3 {
+  margin: 0;
+  font-size: 11px;
+}
+.detail-section-toggle > div > span {
+  color: #819089;
+  font-size: 8px;
+}
+.detail-section-toggle .toggle-chevron {
+  width: 14px;
+  height: 14px;
+  color: #819089;
+  transition: transform 0.2s ease;
+}
+.detail-section-toggle .toggle-chevron.open {
+  transform: rotate(180deg);
+}
 .detail-reviews article {
   padding: 12px 0;
   border-top: 1px solid rgba(64, 96, 81, 0.08);

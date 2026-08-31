@@ -1,6 +1,7 @@
 "use client";
 
-import { X } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, X } from "lucide-react";
 import {
   checkProductAvailability,
   getInstallmentOptions,
@@ -19,6 +20,7 @@ export function ProductDetail({
   onClose: () => void;
   onAddToCart: (productId: string, quantity: number) => void;
 }) {
+  const [showReviews, setShowReviews] = useState(false);
   useEscapeDismiss(true, onClose);
   const detail = getProduct(productId);
   if (!detail.success) return null;
@@ -138,11 +140,22 @@ export function ProductDetail({
             </div>
           </section>
           <section className="detail-reviews">
-            <div className="detail-section-title">
-              <h3>Customer reviews</h3>
-              <span>{product.reviewCount} total</span>
-            </div>
-            {reviews.success &&
+            <button
+              className="detail-section-toggle"
+              onClick={() => setShowReviews((v) => !v)}
+              aria-expanded={showReviews}
+            >
+              <div>
+                <h3>Customer reviews</h3>
+                <span>{product.reviewCount} total</span>
+              </div>
+              <ChevronDown
+                className={`toggle-chevron ${showReviews ? "open" : ""}`}
+                aria-hidden="true"
+              />
+            </button>
+            {showReviews &&
+              reviews.success &&
               reviews.reviews.map((review) => (
                 <article key={review.id}>
                   <div>
