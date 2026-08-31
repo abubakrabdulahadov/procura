@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+let globalNavigate: ((path: string) => void) | null = null;
 
 interface ToolInput {
   [key: string]: unknown;
@@ -270,9 +273,10 @@ const publicTools: ToolDef[] = [
     annotations: { readOnlyHint: true },
     execute: traced("navigate_to", "Navigate", async (input) => {
       const page = input.page as string;
+      const nav = globalNavigate ?? ((p: string) => { window.location.href = p; });
       if (page === "product") {
         if (!input.productId) return json({ success: false, error: "productId is required for product page." });
-        window.location.href = `/product/${encodeURIComponent(input.productId as string)}`;
+        nav(`/product/${encodeURIComponent(input.productId as string)}`);
         return json({ success: true, navigated_to: "product", productId: input.productId });
       }
       const routes: Record<string, string> = {
@@ -284,7 +288,7 @@ const publicTools: ToolDef[] = [
       };
       const path = routes[page];
       if (!path) return json({ success: false, error: "Unknown page." });
-      window.location.href = path;
+      nav(path);
       return json({ success: true, navigated_to: page });
     }),
   },
@@ -464,6 +468,13 @@ const authTools: ToolDef[] = [
 ];
 
 export function WebMCPProvider() {
+  const router = useRouter();
+
+  useEffect(() => {
+    globalNavigate = (path: string) => router.push(path);
+    return () => { globalNavigate = null; };
+  }, [router]);
+
   useEffect(() => {
     const mc = (document as unknown as { modelContext?: ModelContext }).modelContext;
     if (!mc) return;
