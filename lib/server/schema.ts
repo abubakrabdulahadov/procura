@@ -18,6 +18,14 @@ export const carts = pgTable("carts", {
   updatedAt: text("updated_at").notNull(),
 });
 
+export const budgets = pgTable("budgets", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  limitAmount: text("limit_amount").notNull().default("0"),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const orderProposals = pgTable("order_proposals", {
   id: text("id").primaryKey(),
   userId: text("user_id")

@@ -93,12 +93,14 @@ function json(data: unknown): string {
   return JSON.stringify(data);
 }
 
-const toolDefs: ToolDef[] = [
+// --- Tool definitions split by auth requirement ---
+
+const publicTools: ToolDef[] = [
   {
     name: "check_auth_status",
     title: "Auth Status",
     description:
-      "Check if the user is signed in. Returns user name and email if authenticated, or signed_in: false. Call this before any tool that requires authentication.",
+      "Check if the user is signed in. Returns user info if authenticated, or signed_in: false with a link to the sign-in page.",
     inputSchema: { type: "object", properties: {} },
     annotations: { readOnlyHint: true },
     execute: traced("check_auth_status", "Auth Status", async () => {
@@ -113,7 +115,7 @@ const toolDefs: ToolDef[] = [
       return json({
         success: true,
         signed_in: false,
-        message: "User is not signed in. They need to sign in at /login before using cart or order tools.",
+        message: "User is not signed in. Use navigate_to with page 'login' so they can sign in.",
       });
     }),
   },
@@ -233,10 +235,44 @@ const toolDefs: ToolDef[] = [
     }),
   },
   {
+    name: "navigate_to",
+    title: "Navigate",
+    description:
+      "Navigate the user to a page in Procura. Use after adding items to cart or when the user needs to see a specific page.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        page: {
+          type: "string",
+          enum: ["catalog", "cart", "orders", "login", "signup"],
+          description: "Target page",
+        },
+      },
+      required: ["page"],
+    },
+    annotations: { readOnlyHint: true },
+    execute: traced("navigate_to", "Navigate", async (input) => {
+      const routes: Record<string, string> = {
+        catalog: "/",
+        cart: "/cart",
+        orders: "/orders",
+        login: "/login",
+        signup: "/signup",
+      };
+      const path = routes[input.page as string];
+      if (!path) return json({ success: false, error: "Unknown page." });
+      window.location.href = path;
+      return json({ success: true, navigated_to: input.page });
+    }),
+  },
+];
+
+const authTools: ToolDef[] = [
+  {
     name: "view_cart",
     title: "View Cart",
     description:
-      "View shopping cart contents with items, quantities, prices, and subtotal. Requires sign-in — call check_auth_status first.",
+      "View shopping cart contents with items, quantities, prices, and subtotal.",
     inputSchema: { type: "object", properties: {} },
     annotations: { readOnlyHint: true },
     execute: traced("view_cart", "View Cart", async () => json(await api("/api/cart"))),
@@ -245,7 +281,7 @@ const toolDefs: ToolDef[] = [
     name: "add_to_cart",
     title: "Add to Cart",
     description:
-      "Add a product to the cart. Stacks quantity if already present. Requires sign-in — call check_auth_status first.",
+      "Add a product to the cart. Stacks quantity if already present.",
     inputSchema: {
       type: "object",
       properties: {
@@ -268,8 +304,7 @@ const toolDefs: ToolDef[] = [
   {
     name: "update_cart_quantity",
     title: "Update Quantity",
-    description:
-      "Change quantity of a cart item. Requires sign-in — call check_auth_status first.",
+    description: "Change quantity of a cart item.",
     inputSchema: {
       type: "object",
       properties: {
@@ -292,8 +327,7 @@ const toolDefs: ToolDef[] = [
   {
     name: "remove_from_cart",
     title: "Remove from Cart",
-    description:
-      "Remove a product from the cart entirely. Requires sign-in — call check_auth_status first.",
+    description: "Remove a product from the cart entirely.",
     inputSchema: {
       type: "object",
       properties: {
@@ -315,7 +349,7 @@ const toolDefs: ToolDef[] = [
     name: "place_order",
     title: "Place Order",
     description:
-      "Place an order from cart. Installments (3, 6, 12, 24 months) require each item's line total >= $100. Fees: 3/6mo 0%, 12mo 4%, 24mo 9%. Requires sign-in — call check_auth_status first.",
+      "Place an order from cart. Installments (3, 6, 12, 24 months) require each item's line total >= $100. Fees: 3/6mo 0%, 12mo 4%, 24mo 9%. Blocked if it exceeds the user's budget.",
     inputSchema: {
       type: "object",
       properties: {
@@ -350,7 +384,7 @@ const toolDefs: ToolDef[] = [
     name: "view_orders",
     title: "Order History",
     description:
-      "View all placed orders with items, totals, installment terms, status, and dates. Requires sign-in — call check_auth_status first.",
+      "View all orders with items, totals, installment terms, status, and dates.",
     inputSchema: { type: "object", properties: {} },
     annotations: { readOnlyHint: true },
     execute: traced("view_orders", "Order History", async () => json(await api("/api/orders"))),
@@ -359,7 +393,7 @@ const toolDefs: ToolDef[] = [
     name: "cancel_order",
     title: "Cancel Order",
     description:
-      "Cancel an active order by its ID. Only placed (active) orders can be cancelled. Requires sign-in — call check_auth_status first.",
+      "Cancel an active order by its ID. Only placed (active) orders can be cancelled.",
     inputSchema: {
       type: "object",
       properties: {
@@ -376,6 +410,34 @@ const toolDefs: ToolDef[] = [
       return json(result);
     }),
   },
+  {
+    name: "get_budget",
+    title: "View Budget",
+    description:
+      "Get the user's procurement budget — limit, amount spent, and remaining balance. Returns hasLimit: false if no budget is set.",
+    inputSchema: { type: "object", properties: {} },
+    annotations: { readOnlyHint: true },
+    execute: traced("get_budget", "View Budget", async () => json(await api("/api/budget"))),
+  },
+  {
+    name: "set_budget",
+    title: "Set Budget",
+    description:
+      "Set a procurement spending limit. Orders that would exceed this limit are blocked. Set to 0 to remove the limit.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "number", description: "Budget limit in USD (0 to remove)" },
+      },
+      required: ["limit"],
+    },
+    annotations: { readOnlyHint: false },
+    execute: traced("set_budget", "Set Budget", async (input) => {
+      const result = await postJson("/api/budget", { limit: input.limit });
+      emit();
+      return json(result);
+    }),
+  },
 ];
 
 export function WebMCPProvider() {
@@ -383,20 +445,49 @@ export function WebMCPProvider() {
     const mc = (document as unknown as { modelContext?: ModelContext }).modelContext;
     if (!mc) return;
 
-    const controller = new AbortController();
+    const publicController = new AbortController();
+    let authController: AbortController | null = null;
 
-    for (const tool of toolDefs) {
-      mc.registerTool(tool, { signal: controller.signal }).catch(() => {});
+    for (const tool of publicTools) {
+      mc.registerTool(tool, { signal: publicController.signal }).catch(() => {});
     }
 
-    window.dispatchEvent(
-      new CustomEvent("webmcp:ready", {
-        detail: { tools: toolDefs.map((t) => t.name) },
-      }),
-    );
+    async function syncAuthTools() {
+      if (!mc) return;
+      const session = await api("/api/auth/session");
+      const isSignedIn = !!session.user;
+
+      if (isSignedIn && !authController) {
+        authController = new AbortController();
+        for (const tool of authTools) {
+          mc.registerTool(tool, { signal: authController.signal }).catch(() => {});
+        }
+      } else if (!isSignedIn && authController) {
+        authController.abort();
+        authController = null;
+      }
+
+      window.dispatchEvent(
+        new CustomEvent("webmcp:ready", {
+          detail: {
+            tools: [
+              ...publicTools.map((t) => t.name),
+              ...(isSignedIn ? authTools.map((t) => t.name) : []),
+            ],
+          },
+        }),
+      );
+    }
+
+    syncAuthTools();
+
+    const onSync = () => syncAuthTools();
+    window.addEventListener("webmcp:sync", onSync);
 
     return () => {
-      controller.abort();
+      window.removeEventListener("webmcp:sync", onSync);
+      publicController.abort();
+      authController?.abort();
     };
   }, []);
 

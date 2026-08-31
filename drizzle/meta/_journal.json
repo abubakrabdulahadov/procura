@@ -8,6 +8,13 @@
       "when": 1788170981677,
       "tag": "0000_loose_nightshade",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788194485046,
+      "tag": "0001_blue_odin",
+      "breakpoints": true
     }
   ]
 }

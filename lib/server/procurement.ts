@@ -2,7 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { products } from "@/lib/data/mock";
 import { checkProductAvailability } from "@/lib/procurement/product-intelligence";
 import { db } from "@/lib/server/database";
-import { carts, orderProposals, orders } from "@/lib/server/schema";
+import { budgets, carts, orderProposals, orders } from "@/lib/server/schema";
 import type { Cart, Order, OrderProposal } from "@/types/procurement";
 
 function cartSnapshot(row: { quantitiesJson: string; updatedAt: string }): Cart {
@@ -132,8 +132,18 @@ export async function prepareUserOrder(userId: string, installmentMonths?: numbe
         },
       };
   }
+  const budget = await getUserBudget(userId);
   const rate = installmentMonths === 12 ? 0.04 : installmentMonths === 24 ? 0.09 : 0;
   const paymentFee = Number((cart.subtotal * rate).toFixed(2));
+  const orderTotal = Number((cart.subtotal + paymentFee).toFixed(2));
+  if (budget.hasLimit && orderTotal > budget.remaining)
+    return {
+      success: false as const,
+      error: {
+        code: "BUDGET_EXCEEDED",
+        message: `This order ($${orderTotal.toFixed(2)}) exceeds your remaining budget of $${budget.remaining.toFixed(2)} (limit: $${budget.limit.toFixed(2)}, spent: $${budget.spent.toFixed(2)}).`,
+      },
+    };
   const ranges = cart.items
     .map((item) => checkProductAvailability(item.product.id, item.quantity))
     .filter((item) => item.success);
@@ -278,6 +288,41 @@ export async function listUserOrders(userId: string): Promise<Order[]> {
     .where(eq(orders.userId, userId))
     .orderBy(desc(orders.createdAt));
   return rows.map((row) => JSON.parse(row.orderJson) as Order);
+}
+
+export async function getUserBudget(userId: string) {
+  const [row] = await db
+    .select({ limitAmount: budgets.limitAmount })
+    .from(budgets)
+    .where(eq(budgets.userId, userId));
+  const limit = row ? Number(row.limitAmount) : 0;
+  const allOrders = await listUserOrders(userId);
+  const spent = allOrders
+    .filter((o) => o.status === "placed")
+    .reduce((sum, o) => sum + o.total, 0);
+  return {
+    limit: Number(limit.toFixed(2)),
+    spent: Number(spent.toFixed(2)),
+    remaining: Number((limit - spent).toFixed(2)),
+    hasLimit: limit > 0,
+  };
+}
+
+export async function setUserBudget(userId: string, amount: number) {
+  const updatedAt = new Date().toISOString();
+  const [existing] = await db
+    .select({ userId: budgets.userId })
+    .from(budgets)
+    .where(eq(budgets.userId, userId));
+  if (existing) {
+    await db
+      .update(budgets)
+      .set({ limitAmount: String(amount), updatedAt })
+      .where(eq(budgets.userId, userId));
+  } else {
+    await db.insert(budgets).values({ userId, limitAmount: String(amount), updatedAt });
+  }
+  return getUserBudget(userId);
 }
 
 export async function cancelUserOrder(userId: string, orderId: string) {

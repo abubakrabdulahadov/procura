@@ -115,3 +115,30 @@ export async function fetchOrder(orderId: string) {
     error?: { code: string; message: string };
   };
 }
+export interface Budget {
+  limit: number;
+  spent: number;
+  remaining: number;
+  hasLimit: boolean;
+}
+export async function fetchBudget() {
+  return (await jsonRequest("/api/budget")).data as {
+    success: boolean;
+    budget?: Budget;
+    error?: { code: string; message: string };
+  };
+}
+export async function setBudgetRequest(limit: number) {
+  return (
+    await jsonRequest("/api/budget", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ limit }),
+    })
+  ).data as {
+    success: boolean;
+    budget?: Budget;
+    message?: string;
+    error?: { code: string; message: string };
+  };
+}
