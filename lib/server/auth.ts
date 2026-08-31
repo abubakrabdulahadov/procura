@@ -81,6 +81,8 @@ export async function createUser(input: {
     database.exec("COMMIT");
   } catch (error) {
     database.exec("ROLLBACK");
+    if (error instanceof Error && error.message.includes("UNIQUE constraint"))
+      return { success: false as const, error: "This username is already taken." };
     throw error;
   }
   return { success: true as const, user: publicUser(user) };

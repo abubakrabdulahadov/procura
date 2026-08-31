@@ -18,7 +18,7 @@ export function CommerceHeader({
   useEffect(() => {
     void fetch("/api/auth/session")
       .then((response) => response.json())
-      .then((result) => setUser(result.user))
+      .then((result: { user: SessionUser | null }) => setUser(result.user))
       .catch(() => setUser(null));
   }, []);
   const logout = async () => {

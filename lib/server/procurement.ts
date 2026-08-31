@@ -136,8 +136,10 @@ export function prepareUserOrder(userId: string, installmentMonths?: number) {
     installmentMonths: installmentMonths as 3 | 6 | 12 | 24 | undefined,
     paymentFee,
     total: Number((cart.subtotal + paymentFee).toFixed(2)),
-    deliveryMinDays: Math.max(...ranges.map((item) => item.availability.deliveryMinDays)),
-    deliveryMaxDays: Math.max(...ranges.map((item) => item.availability.deliveryMaxDays)),
+    deliveryMinDays:
+      ranges.length > 0 ? Math.max(...ranges.map((item) => item.availability.deliveryMinDays)) : 0,
+    deliveryMaxDays:
+      ranges.length > 0 ? Math.max(...ranges.map((item) => item.availability.deliveryMaxDays)) : 0,
     status: "pending_human_approval",
     createdAt: new Date().toISOString(),
   };

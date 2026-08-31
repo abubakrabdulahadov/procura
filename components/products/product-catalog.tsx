@@ -33,10 +33,12 @@ export function ProductCatalog() {
   }, [query, result]);
 
   useEffect(() => {
-    void Promise.all([fetchCart(), fetchOrders()]).then(([cartResult, ordersResult]) => {
-      if (cartResult.success && cartResult.cart) setCart(cartResult.cart);
-      if (ordersResult.success) setOrderCount(ordersResult.count ?? 0);
-    });
+    void Promise.all([fetchCart(), fetchOrders()])
+      .then(([cartResult, ordersResult]) => {
+        if (cartResult.success && cartResult.cart) setCart(cartResult.cart);
+        if (ordersResult.success) setOrderCount(ordersResult.count ?? 0);
+      })
+      .catch(() => {});
   }, []);
 
   const addItem = async (productId: string, quantity: number) => {

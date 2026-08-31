@@ -13,11 +13,13 @@ export function OrdersPage() {
   const [cart, setCart] = useState(emptyCart);
   const [authRequired, setAuthRequired] = useState(false);
   useEffect(() => {
-    void Promise.all([fetchCart(), fetchOrders()]).then(([cartResult, orderResult]) => {
-      if (cartResult.success && cartResult.cart) setCart(cartResult.cart);
-      if (orderResult.success && orderResult.orders) setOrders(orderResult.orders);
-      else if (orderResult.error?.code === "AUTH_REQUIRED") setAuthRequired(true);
-    });
+    void Promise.all([fetchCart(), fetchOrders()])
+      .then(([cartResult, orderResult]) => {
+        if (cartResult.success && cartResult.cart) setCart(cartResult.cart);
+        if (orderResult.success && orderResult.orders) setOrders(orderResult.orders);
+        else if (orderResult.error?.code === "AUTH_REQUIRED") setAuthRequired(true);
+      })
+      .catch(() => {});
   }, []);
   return (
     <div className="app-shell">

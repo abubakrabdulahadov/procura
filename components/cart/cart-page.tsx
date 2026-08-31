@@ -22,12 +22,15 @@ export function CartPage() {
   const [orderCount, setOrderCount] = useState(0);
   const [authRequired, setAuthRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [placing, setPlacing] = useState(false);
   useEffect(() => {
-    void Promise.all([fetchCart(), fetchOrders()]).then(([cartResult, orderResult]) => {
-      if (cartResult.success && cartResult.cart) setCart(cartResult.cart);
-      else if (cartResult.error?.code === "AUTH_REQUIRED") setAuthRequired(true);
-      if (orderResult.success) setOrderCount(orderResult.count ?? 0);
-    });
+    void Promise.all([fetchCart(), fetchOrders()])
+      .then(([cartResult, orderResult]) => {
+        if (cartResult.success && cartResult.cart) setCart(cartResult.cart);
+        else if (cartResult.error?.code === "AUTH_REQUIRED") setAuthRequired(true);
+        if (orderResult.success) setOrderCount(orderResult.count ?? 0);
+      })
+      .catch(() => setError("Could not load cart data."));
   }, []);
   const update = async (productId: string, quantity: number) => {
     const result = await mutateCart(quantity < 1 ? "remove" : "update", productId, quantity);
@@ -35,16 +38,25 @@ export function CartPage() {
     else setError(result.error?.message ?? "Cart update failed.");
   };
   const place = async () => {
-    const prepared = await prepareOrderRequest();
-    if (!prepared.success || !prepared.proposal)
-      return setError(prepared.error?.message ?? "Could not prepare order.");
-    const approved = await approveOrderRequest(prepared.proposal.id);
-    if (!approved.success || !approved.proposal)
-      return setError(approved.error?.message ?? "Could not approve order.");
-    const result = await placeOrderRequest(approved.proposal.id);
-    if (!result.success) return setError(result.error?.message ?? "Could not place order.");
-    router.push("/orders");
-    router.refresh();
+    if (placing) return;
+    setPlacing(true);
+    setError(null);
+    try {
+      const prepared = await prepareOrderRequest();
+      if (!prepared.success || !prepared.proposal)
+        return setError(prepared.error?.message ?? "Could not prepare order.");
+      const approved = await approveOrderRequest(prepared.proposal.id);
+      if (!approved.success || !approved.proposal)
+        return setError(approved.error?.message ?? "Could not approve order.");
+      const result = await placeOrderRequest(approved.proposal.id);
+      if (!result.success) return setError(result.error?.message ?? "Could not place order.");
+      router.push("/orders");
+      router.refresh();
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setPlacing(false);
+    }
   };
   return (
     <div className="app-shell">
@@ -132,7 +144,9 @@ export function CartPage() {
                     {error}
                   </p>
                 )}
-                <button onClick={place}>Place order</button>
+                <button onClick={place} disabled={placing}>
+                  {placing ? "Placing order…" : "Place order"}
+                </button>
                 <small>Placing confirms this cart and creates the order immediately.</small>
               </aside>
             </div>
