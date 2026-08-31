@@ -4375,16 +4375,6 @@ summary:focus-visible {
 .agent-entry-done .agent-entry-label {
   color: #6b7f74;
 }
-.agent-entry-tool {
-  flex: 0 0 auto;
-  padding: 3px 5px;
-  border-radius: 5px;
-  background: rgba(45, 74, 60, 0.06);
-  color: #829089;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 6.5px;
-  font-weight: 600;
-}
 .agent-spinner {
   width: 10px;
   height: 10px;

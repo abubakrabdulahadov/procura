@@ -5,36 +5,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 interface ToolCall {
   id: number;
   name: string;
-  label: string;
-  input: Record<string, unknown>;
   status: "running" | "done" | "error";
   ts: number;
 }
 
-const toolLabels: Record<string, (input: Record<string, unknown>) => string> = {
-  search_products: (i) => {
-    const parts: string[] = [];
-    if (i.category) parts.push(String(i.category));
-    if (i.maxPrice) parts.push(`under $${i.maxPrice}`);
-    if (i.usbC) parts.push("USB-C");
-    return parts.length ? `Searching ${parts.join(", ")}` : "Browsing full catalog";
-  },
-  get_product_details: (i) => `Inspecting ${formatId(i.productId as string)}`,
-  get_product_reviews: (i) => `Reading reviews for ${formatId(i.productId as string)}`,
-  view_cart: () => "Checking cart contents",
-  add_to_cart: (i) => `Adding ${formatId(i.productId as string)} to cart`,
-  update_cart_quantity: (i) => `Setting quantity to ${i.quantity}`,
-  remove_from_cart: (i) => `Removing ${formatId(i.productId as string)}`,
-  place_order: (i) =>
-    i.installmentMonths
-      ? `Placing order — ${i.installmentMonths}mo installments`
-      : "Placing order — single payment",
-  view_orders: () => "Reviewing order history",
-};
-
-function formatId(id: string) {
-  return id
-    .replace(/-/g, " ")
+function formatName(name: string) {
+  return name
+    .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
@@ -56,12 +33,10 @@ export function AgentActivity() {
       setToolsRegistered(tools.length > 0);
     };
     const onStart = (e: Event) => {
-      const { id, name, input } = (e as CustomEvent).detail;
+      const { id, name } = (e as CustomEvent).detail;
       setAgentConnected(true);
-      const labelFn = toolLabels[name];
-      const label = labelFn ? labelFn(input) : name.replace(/_/g, " ");
       setCalls((prev) =>
-        [{ id, name, label, input, status: "running" as const, ts: Date.now() }, ...prev].slice(0, 30),
+        [{ id, name, status: "running" as const, ts: Date.now() }, ...prev].slice(0, 30),
       );
       setExpanded(true);
       clearTimeout(collapseTimer.current);
@@ -110,7 +85,7 @@ export function AgentActivity() {
         <strong>AI Agent</strong>
         {running > 0 && <span className="agent-count">{running}</span>}
         {calls.length > 0 && !expanded && (
-          <span className="agent-peek">{calls[0].label}</span>
+          <span className="agent-peek">{formatName(calls[0].name)}</span>
         )}
       </button>
 
@@ -127,8 +102,7 @@ export function AgentActivity() {
                   "✗"
                 )}
               </span>
-              <span className="agent-entry-label">{call.label}</span>
-              <span className="agent-entry-tool">{call.name}</span>
+              <span className="agent-entry-label">{formatName(call.name)}</span>
             </div>
           ))}
         </div>
