@@ -4737,9 +4737,27 @@ summary:focus-visible {
   font-weight: 700;
   font-size: 13px;
 }
-.compare-best {
+.compare-col-recommended {
+  background: rgba(99, 102, 241, 0.04);
+}
+.compare-cell-best {
   color: var(--green);
   font-weight: 700 !important;
+  background: rgba(36, 142, 94, 0.06);
+}
+.compare-rec-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.12));
+  color: #6d28d9;
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  margin-top: 2px;
 }
 @media (max-width: 620px) {
   .compare-panel {

@@ -335,7 +335,7 @@ const publicTools: ToolDef[] = [
     name: "compare_products",
     title: "Compare Products",
     description:
-      "Open a side-by-side comparison panel for 2-4 products on the catalog page. Shows price, specs, rating in a table so the user can visually compare. Call with an empty array to close. User must be on the catalog page.",
+      "Open a side-by-side comparison panel for 2-4 products. Shows price, specs, rating in a table. Use 'recommended' to mark your top picks (column highlight + badge). Use 'highlights' to mark the best product per field (cell highlight). Field keys: price, rating, category, sizeInches, resolution, refreshRateHz, ramGb, storageGb, batteryHours, usbC, connection, material, packSize. Call with empty productIds to close.",
     inputSchema: {
       type: "object",
       properties: {
@@ -344,14 +344,25 @@ const publicTools: ToolDef[] = [
           items: { type: "string" },
           description: "Product IDs to compare (2-4 recommended)",
         },
+        recommended: {
+          type: "array",
+          items: { type: "string" },
+          description: "Product IDs you recommend as best overall picks",
+        },
+        highlights: {
+          type: "object",
+          description: "Per-field best product: { fieldKey: productId }. Highlights that cell as the best value for that field.",
+        },
       },
       required: ["productIds"],
     },
     annotations: { readOnlyHint: true },
     execute: traced("compare_products", "Compare Products", async (input) => {
       const ids = input.productIds as string[];
+      const rec = input.recommended as string[] | undefined;
+      const hl = input.highlights as Record<string, string> | undefined;
       window.dispatchEvent(
-        new CustomEvent("webmcp:compare", { detail: { productIds: ids } }),
+        new CustomEvent("webmcp:compare", { detail: { productIds: ids, recommended: rec, highlights: hl } }),
       );
       if (ids.length === 0) return json({ success: true, message: "Comparison closed." });
       return json({ success: true, comparing: ids.length, productIds: ids });
