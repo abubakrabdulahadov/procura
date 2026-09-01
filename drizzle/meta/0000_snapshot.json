@@ -34,12 +34,8 @@
           "name": "carts_user_id_users_id_fk",
           "tableFrom": "carts",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -97,12 +93,8 @@
           "name": "order_proposals_user_id_users_id_fk",
           "tableFrom": "order_proposals",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -176,12 +168,8 @@
           "name": "orders_user_id_users_id_fk",
           "tableFrom": "orders",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -191,9 +179,7 @@
         "orders_proposal_id_unique": {
           "name": "orders_proposal_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "proposal_id"
-          ]
+          "columns": ["proposal_id"]
         }
       },
       "policies": {},
@@ -254,9 +240,7 @@
         "users_username_unique": {
           "name": "users_username_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "username"
-          ]
+          "columns": ["username"]
         }
       },
       "policies": {},

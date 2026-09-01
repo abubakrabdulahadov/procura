@@ -1665,8 +1665,13 @@ summary:focus-visible {
   animation: badge-glow 2.5s ease-in-out infinite;
 }
 @keyframes badge-glow {
-  0%, 100% { box-shadow: 0 4px 14px rgba(26, 107, 71, 0.35); }
-  50% { box-shadow: 0 4px 22px rgba(26, 107, 71, 0.55); }
+  0%,
+  100% {
+    box-shadow: 0 4px 14px rgba(26, 107, 71, 0.35);
+  }
+  50% {
+    box-shadow: 0 4px 22px rgba(26, 107, 71, 0.55);
+  }
 }
 .commerce-visual {
   width: 78%;
@@ -3870,7 +3875,9 @@ summary:focus-visible {
   font-size: 7.5px;
   font-weight: 640;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 .order-cancel-btn:hover:not(:disabled) {
   background: rgba(185, 28, 28, 0.1);
@@ -4462,7 +4469,9 @@ summary:focus-visible {
   font-size: 9px;
   font-weight: 660;
   cursor: pointer;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  transition:
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 }
 .agent-pill:hover {
   border-color: rgba(39, 119, 78, 0.25);
@@ -4475,7 +4484,9 @@ summary:focus-visible {
   height: 8px;
   border-radius: 50%;
   background: #8ba69a;
-  transition: background 0.3s ease, box-shadow 0.3s ease;
+  transition:
+    background 0.3s ease,
+    box-shadow 0.3s ease;
 }
 .agent-dot-idle {
   background: #b0bbb5;
@@ -4592,17 +4603,30 @@ summary:focus-visible {
   animation: agent-spin 0.7s linear infinite;
 }
 @keyframes agent-pulse {
-  0%, 100% { box-shadow: 0 0 0 4px rgba(45, 160, 106, 0.18); }
-  50% { box-shadow: 0 0 0 7px rgba(45, 160, 106, 0.08); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px rgba(45, 160, 106, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(45, 160, 106, 0.08);
+  }
 }
 @keyframes agent-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 @keyframes agent-feed-in {
-  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
 }
 @keyframes agent-entry-in {
-  from { opacity: 0; transform: translateX(12px); }
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
 }
 @media (max-width: 620px) {
   .agent-panel {
@@ -4647,8 +4671,14 @@ summary:focus-visible {
   animation: approval-rise 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 @keyframes approval-rise {
-  from { opacity: 0; transform: translateY(10px) scale(0.985); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 .approval-header {
   display: flex;
@@ -4693,8 +4723,13 @@ summary:focus-visible {
   cursor: pointer;
   transition: background 0.15s;
 }
-.approval-dismiss:hover:not(:disabled) { background: rgba(0, 0, 0, 0.04); }
-.approval-dismiss:disabled { opacity: 0.4; cursor: default; }
+.approval-dismiss:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.04);
+}
+.approval-dismiss:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 .approval-body {
   padding: 12px 20px 4px;
   overflow-y: auto;
@@ -4726,18 +4761,38 @@ summary:focus-visible {
   font-size: 10.5px;
   background: rgba(255, 255, 255, 0.4);
 }
-.approval-item + .approval-item { border-top: 1px solid rgba(0, 0, 0, 0.05); }
+.approval-item + .approval-item {
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
 .approval-item small {
   display: block;
   font-size: 8.5px;
   color: var(--muted);
   margin-top: 1px;
 }
-.approval-item strong { white-space: nowrap; font-weight: 660; }
-.approval-lines { margin: 0 0 12px; display: grid; gap: 6px; }
-.approval-lines div { display: flex; justify-content: space-between; gap: 12px; }
-.approval-lines dt { font-size: 10px; color: var(--muted); }
-.approval-lines dd { margin: 0; font-size: 10px; font-weight: 640; }
+.approval-item strong {
+  white-space: nowrap;
+  font-weight: 660;
+}
+.approval-lines {
+  margin: 0 0 12px;
+  display: grid;
+  gap: 6px;
+}
+.approval-lines div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.approval-lines dt {
+  font-size: 10px;
+  color: var(--muted);
+}
+.approval-lines dd {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 640;
+}
 .approval-total {
   display: flex;
   align-items: baseline;
@@ -4747,8 +4802,16 @@ summary:focus-visible {
   background: var(--green-soft);
   border: 1px solid rgba(36, 142, 94, 0.16);
 }
-.approval-total span { font-size: 10px; font-weight: 640; color: var(--green); }
-.approval-total strong { font-size: 17px; font-weight: 720; letter-spacing: -0.02em; }
+.approval-total span {
+  font-size: 10px;
+  font-weight: 640;
+  color: var(--green);
+}
+.approval-total strong {
+  font-size: 17px;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
 .approval-actions {
   display: grid;
   grid-template-columns: 1fr 1.6fr;
@@ -4761,24 +4824,39 @@ summary:focus-visible {
   font-size: 10.5px;
   font-weight: 680;
   cursor: pointer;
-  transition: filter 0.15s, background 0.15s;
+  transition:
+    filter 0.15s,
+    background 0.15s;
 }
-.approval-actions button:disabled { opacity: 0.55; cursor: default; }
+.approval-actions button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
 .approval-reject {
   border: 1px solid rgba(185, 28, 28, 0.18);
   background: rgba(185, 28, 28, 0.05);
   color: #b91c1c;
 }
-.approval-reject:hover:not(:disabled) { background: rgba(185, 28, 28, 0.1); }
+.approval-reject:hover:not(:disabled) {
+  background: rgba(185, 28, 28, 0.1);
+}
 .approval-approve {
   border: 1px solid transparent;
   background: linear-gradient(135deg, #17805a, #0f6444);
   color: #fff;
 }
-.approval-approve:hover:not(:disabled) { filter: brightness(1.08); }
+.approval-approve:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
 @media (max-width: 620px) {
-  .approval-overlay { padding: 12px; align-items: flex-end; }
-  .approval-panel { max-width: 100%; border-radius: 16px; }
+  .approval-overlay {
+    padding: 12px;
+    align-items: flex-end;
+  }
+  .approval-panel {
+    max-width: 100%;
+    border-radius: 16px;
+  }
 }
 
 /* ── Compare Panel ── */
@@ -4795,8 +4873,12 @@ summary:focus-visible {
   animation: fade-in 0.2s ease;
 }
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 .compare-panel {
   background: var(--glass-strong);

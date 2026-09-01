@@ -32,6 +32,12 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     );
-  const result = await mutateUserCart(user.id, body.action, body.productId, body.quantity, body.source);
+  const result = await mutateUserCart(
+    user.id,
+    body.action,
+    body.productId,
+    body.quantity,
+    body.source,
+  );
   return NextResponse.json(result, { status: result.success ? 200 : 400 });
 }

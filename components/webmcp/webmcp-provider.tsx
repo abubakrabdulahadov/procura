@@ -77,9 +77,7 @@ function emitToolStart(name: string, title: string | undefined, input: ToolInput
 }
 
 function emitToolEnd(id: number, name: string, success: boolean) {
-  window.dispatchEvent(
-    new CustomEvent("webmcp:tool-end", { detail: { id, name, success } }),
-  );
+  window.dispatchEvent(new CustomEvent("webmcp:tool-end", { detail: { id, name, success } }));
 }
 
 function traced(
@@ -150,7 +148,7 @@ const publicTools: ToolDef[] = [
       };
       const currentPage = path.startsWith("/product/")
         ? `product:${path.slice("/product/".length)}`
-        : pageMap[path] ?? path;
+        : (pageMap[path] ?? path);
       const session = await api("/api/auth/session");
       if (session.user) {
         return json({
@@ -199,7 +197,8 @@ const publicTools: ToolDef[] = [
         },
         minResolution: {
           type: "string",
-          description: "Minimum display resolution as WIDTHxHEIGHT, e.g. '2560x1440'. Compares by pixel area.",
+          description:
+            "Minimum display resolution as WIDTHxHEIGHT, e.g. '2560x1440'. Compares by pixel area.",
         },
         usbC: {
           type: "boolean",
@@ -248,11 +247,8 @@ const publicTools: ToolDef[] = [
     },
     annotations: { readOnlyHint: true },
     execute: traced("get_product_details", "Product Details", async (input) => {
-      const {
-        getProduct,
-        checkProductAvailability,
-        getInstallmentOptions,
-      } = await import("@/lib/procurement/product-intelligence");
+      const { getProduct, checkProductAvailability, getInstallmentOptions } =
+        await import("@/lib/procurement/product-intelligence");
       const detail = getProduct(input.productId as string);
       if (!detail.success) return json(detail);
       const avail = checkProductAvailability(input.productId as string, 1);
@@ -319,7 +315,9 @@ const publicTools: ToolDef[] = [
     annotations: { readOnlyHint: true },
     execute: traced("get_installment_options", "Installment Options", async (input) => {
       const { getInstallmentOptions } = await import("@/lib/procurement/product-intelligence");
-      return json(getInstallmentOptions(input.productId as string, (input.quantity as number) || 1));
+      return json(
+        getInstallmentOptions(input.productId as string, (input.quantity as number) || 1),
+      );
     }),
   },
   {
@@ -345,9 +343,14 @@ const publicTools: ToolDef[] = [
     annotations: { readOnlyHint: false, idempotentHint: true },
     execute: traced("navigate_to", "Navigate", async (input) => {
       const page = input.page as string;
-      const nav = globalNavigate ?? ((p: string) => { window.location.href = p; });
+      const nav =
+        globalNavigate ??
+        ((p: string) => {
+          window.location.href = p;
+        });
       if (page === "product") {
-        if (!input.productId) return json({ success: false, error: "productId is required for product page." });
+        if (!input.productId)
+          return json({ success: false, error: "productId is required for product page." });
         nav(`/product/${encodeURIComponent(input.productId as string)}`);
         return json({ success: true, navigated_to: "product", productId: input.productId });
       }
@@ -397,7 +400,9 @@ const publicTools: ToolDef[] = [
       window.dispatchEvent(new CustomEvent("webmcp:highlight", { detail: { productIds: ids } }));
       if (ids.length === 0) return json({ success: true, message: "Highlights cleared." });
 
-      const visible = ids.filter((id) => document.querySelector(`[data-product-id="${CSS.escape(id)}"]`));
+      const visible = ids.filter((id) =>
+        document.querySelector(`[data-product-id="${CSS.escape(id)}"]`),
+      );
       const notVisible = ids.filter((id) => !visible.includes(id));
       return json({
         success: true,
@@ -418,7 +423,8 @@ const publicTools: ToolDef[] = [
     inputSchema: { type: "object", properties: {} },
     annotations: { readOnlyHint: true },
     execute: traced("get_page_context", "Page Context", async () => {
-      const ctx = (window as unknown as { __procuraPageContext?: Record<string, unknown> }).__procuraPageContext;
+      const ctx = (window as unknown as { __procuraPageContext?: Record<string, unknown> })
+        .__procuraPageContext;
       if (!ctx) return json({ success: true, page: window.location.pathname, context: null });
       return json({ success: true, ...ctx });
     }),
@@ -444,7 +450,7 @@ const publicTools: ToolDef[] = [
         highlights: {
           type: "object",
           description:
-            "Per-row winner as { rowKey: productId }, e.g. { \"price\": \"hp-e27q-g5\", \"resolution\": \"lg-27up850n-w\" }. That cell is highlighted as the best value for that row.",
+            'Per-row winner as { rowKey: productId }, e.g. { "price": "hp-e27q-g5", "resolution": "lg-27up850n-w" }. That cell is highlighted as the best value for that row.',
         },
         note: {
           type: "string",
@@ -503,8 +509,7 @@ const authTools: ToolDef[] = [
   {
     name: "view_cart",
     title: "View Cart",
-    description:
-      "View shopping cart contents with items, quantities, prices, and subtotal.",
+    description: "View shopping cart contents with items, quantities, prices, and subtotal.",
     inputSchema: { type: "object", properties: {} },
     annotations: { readOnlyHint: true },
     execute: traced("view_cart", "View Cart", async () => json(await api("/api/cart"))),
@@ -512,8 +517,7 @@ const authTools: ToolDef[] = [
   {
     name: "add_to_cart",
     title: "Add to Cart",
-    description:
-      "Add a product to the cart. Stacks quantity if already present.",
+    description: "Add a product to the cart. Stacks quantity if already present.",
     inputSchema: {
       type: "object",
       properties: {
@@ -678,8 +682,7 @@ const authTools: ToolDef[] = [
   {
     name: "view_orders",
     title: "Order History",
-    description:
-      "View all orders with items, totals, installment terms, status, and dates.",
+    description: "View all orders with items, totals, installment terms, status, and dates.",
     inputSchema: { type: "object", properties: {} },
     annotations: { readOnlyHint: true },
     execute: traced("view_orders", "Order History", async () => json(await api("/api/orders"))),
@@ -687,8 +690,7 @@ const authTools: ToolDef[] = [
   {
     name: "cancel_order",
     title: "Cancel Order",
-    description:
-      "Cancel an active order by its ID. Only placed (active) orders can be cancelled.",
+    description: "Cancel an active order by its ID. Only placed (active) orders can be cancelled.",
     inputSchema: {
       type: "object",
       properties: {
@@ -851,10 +853,12 @@ const authTools: ToolDef[] = [
     },
     annotations: { readOnlyHint: true },
     execute: traced("preview_order", "Order Preview", async (input) =>
-      json(await postJson("/api/orders/preview", {
-        productIds: input.productIds,
-        installmentMonths: input.installmentMonths,
-      })),
+      json(
+        await postJson("/api/orders/preview", {
+          productIds: input.productIds,
+          installmentMonths: input.installmentMonths,
+        }),
+      ),
     ),
   },
   {
@@ -887,42 +891,63 @@ export function WebMCPProvider() {
 
   useEffect(() => {
     globalNavigate = (path: string) => router.push(path);
-    return () => { globalNavigate = null; };
+    return () => {
+      globalNavigate = null;
+    };
   }, [router]);
 
   useEffect(() => {
     const mc = (document as unknown as { modelContext?: ModelContext }).modelContext;
     if (!mc) return;
+    const modelContext = mc;
 
     const publicController = new AbortController();
     let authController: AbortController | null = null;
+    let authRegistration: Promise<{ registered: string[]; failed: string[] }> | null = null;
 
-    for (const tool of publicTools) {
-      mc.registerTool(tool, { signal: publicController.signal }).catch(() => {});
+    async function registerTools(tools: ToolDef[], signal: AbortSignal) {
+      const results = await Promise.allSettled(
+        tools.map((tool) => modelContext.registerTool(tool, { signal })),
+      );
+      const registered: string[] = [];
+      const failed: string[] = [];
+      results.forEach((result, index) => {
+        const tool = tools[index];
+        if (result.status === "fulfilled") registered.push(tool.name);
+        else {
+          failed.push(tool.name);
+          console.error(`WebMCP tool registration failed: ${tool.name}`, result.reason);
+        }
+      });
+      return { registered, failed };
     }
+
+    const publicRegistration = registerTools(publicTools, publicController.signal);
 
     async function syncAuthTools() {
       if (!mc) return;
+      const publicResult = await publicRegistration;
       const session = await api("/api/auth/session");
       const isSignedIn = !!session.user;
+      let authResult = { registered: [] as string[], failed: [] as string[] };
 
       if (isSignedIn && !authController) {
         authController = new AbortController();
-        for (const tool of authTools) {
-          mc.registerTool(tool, { signal: authController.signal }).catch(() => {});
-        }
+        authRegistration = registerTools(authTools, authController.signal);
+        authResult = await authRegistration;
       } else if (!isSignedIn && authController) {
         authController.abort();
         authController = null;
+        authRegistration = null;
+      } else if (isSignedIn && authRegistration) {
+        authResult = await authRegistration;
       }
 
       window.dispatchEvent(
         new CustomEvent("webmcp:ready", {
           detail: {
-            tools: [
-              ...publicTools.map((t) => t.name),
-              ...(isSignedIn ? authTools.map((t) => t.name) : []),
-            ],
+            tools: [...publicResult.registered, ...authResult.registered],
+            failedTools: [...publicResult.failed, ...authResult.failed],
           },
         }),
       );

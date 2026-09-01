@@ -127,7 +127,12 @@ export function OrderApproval() {
   const remainingAfter = budget?.hasLimit ? budget.remaining - proposal.total : null;
 
   return (
-    <div className="approval-overlay" role="dialog" aria-modal="true" aria-label="Approve agent order">
+    <div
+      className="approval-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Approve agent order"
+    >
       <div className="approval-panel">
         <header className="approval-header">
           <span className="approval-badge">
@@ -214,7 +219,11 @@ export function OrderApproval() {
         </div>
 
         <footer className="approval-actions">
-          <button className="approval-reject" onClick={() => void reject()} disabled={busy !== null}>
+          <button
+            className="approval-reject"
+            onClick={() => void reject()}
+            disabled={busy !== null}
+          >
             Reject
           </button>
           <button

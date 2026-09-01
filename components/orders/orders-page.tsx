@@ -29,21 +29,22 @@ export function OrdersPage() {
   useWebMCPSync(reload);
 
   useEffect(() => {
-    (window as unknown as { __procuraPageContext?: Record<string, unknown> }).__procuraPageContext = {
-      page: "orders",
-      totalOrders: orders.length,
-      activeOrders: orders.filter((o) => o.status === "placed").length,
-      cancelledOrders: orders.filter((o) => o.status === "cancelled").length,
-      orders: orders.map((o) => ({
-        id: o.id,
-        status: o.status,
-        total: o.total,
-        itemCount: o.items.length,
-        placedBy: o.placedBy ?? "user",
-        cancelledBy: o.cancelledBy,
-        createdAt: o.createdAt,
-      })),
-    };
+    (window as unknown as { __procuraPageContext?: Record<string, unknown> }).__procuraPageContext =
+      {
+        page: "orders",
+        totalOrders: orders.length,
+        activeOrders: orders.filter((o) => o.status === "placed").length,
+        cancelledOrders: orders.filter((o) => o.status === "cancelled").length,
+        orders: orders.map((o) => ({
+          id: o.id,
+          status: o.status,
+          total: o.total,
+          itemCount: o.items.length,
+          placedBy: o.placedBy ?? "user",
+          cancelledBy: o.cancelledBy,
+          createdAt: o.createdAt,
+        })),
+      };
     return () => {
       (window as unknown as { __procuraPageContext?: null }).__procuraPageContext = null;
     };
@@ -54,9 +55,7 @@ export function OrdersPage() {
     setCancelling(orderId);
     const result = await cancelOrderRequest(orderId);
     if (result.success && result.order) {
-      setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? result.order! : o)),
-      );
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? result.order! : o)));
     }
     setCancelling(null);
   };
@@ -88,7 +87,10 @@ export function OrdersPage() {
           ) : (
             <section className="orders-page-list">
               {orders.map((order) => (
-                <article key={order.id} className={order.status === "cancelled" ? "order-cancelled" : ""}>
+                <article
+                  key={order.id}
+                  className={order.status === "cancelled" ? "order-cancelled" : ""}
+                >
                   <header>
                     <div>
                       <span>Placed {new Date(order.createdAt).toLocaleDateString()}</span>

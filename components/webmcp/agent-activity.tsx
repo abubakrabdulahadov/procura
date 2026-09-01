@@ -11,14 +11,14 @@ interface ToolCall {
 }
 
 function formatName(name: string) {
-  return name
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export function AgentActivity() {
   const [agentConnected, setAgentConnected] = useState(false);
-  const [toolsRegistered, setToolsRegistered] = useState(false);
+  const [toolsRegistered, setToolsRegistered] = useState(
+    () => typeof document !== "undefined" && "modelContext" in document,
+  );
   const [calls, setCalls] = useState<ToolCall[]>([]);
   const [expanded, setExpanded] = useState(false);
   const collapseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -38,7 +38,13 @@ export function AgentActivity() {
       setAgentConnected(true);
       setCalls((prev) =>
         [
-          { id, name, title: title || formatName(name), status: "running" as const, ts: Date.now() },
+          {
+            id,
+            name,
+            title: title || formatName(name),
+            status: "running" as const,
+            ts: Date.now(),
+          },
           ...prev,
         ].slice(0, 30),
       );
@@ -58,8 +64,6 @@ export function AgentActivity() {
     window.addEventListener("webmcp:ready", onReady);
     window.addEventListener("webmcp:tool-start", onStart);
     window.addEventListener("webmcp:tool-end", onEnd);
-
-    if ("modelContext" in document) setToolsRegistered(true);
 
     return () => {
       window.removeEventListener("webmcp:ready", onReady);
@@ -109,9 +113,7 @@ export function AgentActivity() {
         <span className={`agent-dot agent-dot-${status}`} />
         <strong>AI Agent</strong>
         {running > 0 && <span className="agent-count">{running}</span>}
-        {calls.length > 0 && !expanded && (
-          <span className="agent-peek">{calls[0].title}</span>
-        )}
+        {calls.length > 0 && !expanded && <span className="agent-peek">{calls[0].title}</span>}
       </button>
     </div>
   );

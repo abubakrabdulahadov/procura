@@ -3,10 +3,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { ProductVisual } from "@/components/products/product-visual";
-import {
-  checkProductAvailability,
-  getProduct,
-} from "@/lib/procurement/product-intelligence";
+import { checkProductAvailability, getProduct } from "@/lib/procurement/product-intelligence";
 import type { Product, ProductIntelligence } from "@/types/procurement";
 
 interface CompareItem {
@@ -29,14 +26,22 @@ function resolveItem(id: string): CompareItem | null {
   };
 }
 
-const specLabels: { key: keyof Product["specs"]; label: string; format?: (v: unknown) => string }[] = [
+const specLabels: {
+  key: keyof Product["specs"];
+  label: string;
+  format?: (v: unknown) => string;
+}[] = [
   { key: "sizeInches", label: "Display", format: (v) => `${v}"` },
   { key: "resolution", label: "Resolution" },
   { key: "refreshRateHz", label: "Refresh Rate", format: (v) => `${v} Hz` },
   { key: "ramGb", label: "RAM", format: (v) => `${v} GB` },
-  { key: "storageGb", label: "Storage", format: (v) => (v as number) >= 1000 ? `${(v as number) / 1000} TB` : `${v} GB` },
+  {
+    key: "storageGb",
+    label: "Storage",
+    format: (v) => ((v as number) >= 1000 ? `${(v as number) / 1000} TB` : `${v} GB`),
+  },
   { key: "batteryHours", label: "Battery", format: (v) => `${v} hrs` },
-  { key: "usbC", label: "USB-C", format: (v) => v ? "Yes" : "No" },
+  { key: "usbC", label: "USB-C", format: (v) => (v ? "Yes" : "No") },
   { key: "connection", label: "Connection" },
   { key: "material", label: "Material" },
   { key: "packSize", label: "Pack Size", format: (v) => `${v} pcs` },
@@ -106,7 +111,13 @@ export function ComparePanel() {
   };
 
   return (
-    <div className="compare-overlay" onClick={close} role="dialog" aria-modal="true" aria-label="Product comparison">
+    <div
+      className="compare-overlay"
+      onClick={close}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Product comparison"
+    >
       <div className="compare-panel" onClick={(e) => e.stopPropagation()}>
         <header className="compare-header">
           <h2>Compare Products</h2>
@@ -125,7 +136,10 @@ export function ComparePanel() {
                 {items.map((item) => {
                   const isRec = recommended.has(item.product.id);
                   return (
-                    <th key={item.product.id} className={`compare-product-col${isRec ? " compare-col-recommended" : ""}`}>
+                    <th
+                      key={item.product.id}
+                      className={`compare-product-col${isRec ? " compare-col-recommended" : ""}`}
+                    >
                       <div className="compare-product-header">
                         <ProductVisual product={item.product} compact />
                         <span className="compare-brand">{item.product.brand}</span>
@@ -158,7 +172,10 @@ export function ComparePanel() {
               <tr>
                 <td className="compare-label">Purchased</td>
                 {items.map((item) => (
-                  <td key={item.product.id} className={cellClass("purchasedCount", item.product.id)}>
+                  <td
+                    key={item.product.id}
+                    className={cellClass("purchasedCount", item.product.id)}
+                  >
                     {item.product.purchasedCount.toLocaleString()} times
                   </td>
                 ))}
@@ -186,11 +203,7 @@ export function ComparePanel() {
                     const val = item.product.specs[spec.key];
                     return (
                       <td key={item.product.id} className={cellClass(spec.key, item.product.id)}>
-                        {val !== undefined
-                          ? spec.format
-                            ? spec.format(val)
-                            : String(val)
-                          : "—"}
+                        {val !== undefined ? (spec.format ? spec.format(val) : String(val)) : "—"}
                       </td>
                     );
                   })}

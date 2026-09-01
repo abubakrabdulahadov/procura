@@ -200,6 +200,7 @@ export type PlaceOrderResult =
           | "PROPOSAL_NOT_FOUND"
           | "APPROVAL_REQUIRED"
           | "CART_CHANGED_AFTER_APPROVAL"
+          | "BUDGET_EXCEEDED"
           | "ORDER_ALREADY_PLACED"
           | "INSUFFICIENT_STOCK";
         message: string;

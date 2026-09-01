@@ -63,22 +63,23 @@ export function ProductCatalog() {
   }, []);
 
   useEffect(() => {
-    (window as unknown as { __procuraPageContext?: Record<string, unknown> }).__procuraPageContext = {
-      page: "catalog",
-      totalProducts: visibleProducts.length,
-      filters: {
-        category: category === "all" ? null : category,
-        maxPrice: maxPrice ?? null,
-        query: query || null,
-      },
-      products: visibleProducts.map((p) => ({
-        id: p.id,
-        name: p.name,
-        brand: p.brand,
-        category: p.category,
-        price: p.price,
-      })),
-    };
+    (window as unknown as { __procuraPageContext?: Record<string, unknown> }).__procuraPageContext =
+      {
+        page: "catalog",
+        totalProducts: visibleProducts.length,
+        filters: {
+          category: category === "all" ? null : category,
+          maxPrice: maxPrice ?? null,
+          query: query || null,
+        },
+        products: visibleProducts.map((p) => ({
+          id: p.id,
+          name: p.name,
+          brand: p.brand,
+          category: p.category,
+          price: p.price,
+        })),
+      };
     return () => {
       (window as unknown as { __procuraPageContext?: null }).__procuraPageContext = null;
     };

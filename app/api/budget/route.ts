@@ -21,11 +21,18 @@ export async function POST(request: Request) {
       { status: 401 },
     );
   const body = (await request.json().catch(() => ({}))) as { limit?: number };
-  if (typeof body.limit !== "number" || body.limit < 0)
+  if (typeof body.limit !== "number" || !Number.isFinite(body.limit) || body.limit < 0)
     return NextResponse.json(
-      { success: false, error: { code: "INVALID_INPUT", message: "limit must be a non-negative number." } },
+      {
+        success: false,
+        error: { code: "INVALID_INPUT", message: "limit must be a non-negative number." },
+      },
       { status: 400 },
     );
   const budget = await setUserBudget(user.id, body.limit);
-  return NextResponse.json({ success: true, budget, message: `Budget set to $${body.limit.toFixed(2)}.` });
+  return NextResponse.json({
+    success: true,
+    budget,
+    message: `Budget set to $${body.limit.toFixed(2)}.`,
+  });
 }

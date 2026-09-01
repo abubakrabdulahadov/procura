@@ -34,6 +34,27 @@ export function ProductPage({ productId }: { productId: string }) {
   useWebMCPSync(reloadCounts);
 
   const detail = getProduct(productId);
+
+  useEffect(() => {
+    const current = getProduct(productId);
+    (window as unknown as { __procuraPageContext?: Record<string, unknown> }).__procuraPageContext =
+      current.success
+        ? {
+            page: "product",
+            product: {
+              id: current.product.id,
+              name: current.product.name,
+              brand: current.product.brand,
+              category: current.product.category,
+              price: current.product.price,
+            },
+          }
+        : { page: "product", productId, found: false };
+    return () => {
+      (window as unknown as { __procuraPageContext?: null }).__procuraPageContext = null;
+    };
+  }, [productId]);
+
   if (!detail.success) {
     return (
       <div className="app-shell">
@@ -43,7 +64,7 @@ export function ProductPage({ productId }: { productId: string }) {
             <div className="product-page-content">
               <div className="product-page-not-found">
                 <strong>Product not found</strong>
-                <p>The product you're looking for doesn't exist in our catalog.</p>
+                <p>The product you&apos;re looking for doesn&apos;t exist in our catalog.</p>
                 <button onClick={() => router.push("/")}>Back to catalog</button>
               </div>
             </div>
@@ -57,22 +78,6 @@ export function ProductPage({ productId }: { productId: string }) {
   const reviews = getProductReviews(productId, 10);
   const availability = checkProductAvailability(productId, 1);
   const installments = getInstallmentOptions(productId, 1);
-
-  useEffect(() => {
-    (window as unknown as { __procuraPageContext?: Record<string, unknown> }).__procuraPageContext = {
-      page: "product",
-      product: {
-        id: product.id,
-        name: product.name,
-        brand: product.brand,
-        category: product.category,
-        price: product.price,
-      },
-    };
-    return () => {
-      (window as unknown as { __procuraPageContext?: null }).__procuraPageContext = null;
-    };
-  }, [product]);
 
   const addToCart = async () => {
     setAdding(true);

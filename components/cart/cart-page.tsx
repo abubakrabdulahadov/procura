@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { CommerceHeader } from "@/components/layout/commerce-header";
@@ -35,10 +35,20 @@ export function CartPage() {
   const [checkout, setCheckout] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<InstallmentOption | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const knownCartIds = useRef<Set<string>>(new Set());
 
-  useEffect(() => {
-    setSelectedIds(new Set(cart.items.map((i) => i.product.id)));
-  }, [cart.items.length]);
+  const applyCart = useCallback((nextCart: typeof emptyCart) => {
+    const nextIds = new Set(nextCart.items.map((item) => item.product.id));
+    setSelectedIds((selected) => {
+      const nextSelected = new Set([...selected].filter((productId) => nextIds.has(productId)));
+      for (const productId of nextIds) {
+        if (!knownCartIds.current.has(productId)) nextSelected.add(productId);
+      }
+      return nextSelected;
+    });
+    knownCartIds.current = nextIds;
+    setCart(nextCart);
+  }, []);
 
   const selectedItems = useMemo(
     () => cart.items.filter((i) => selectedIds.has(i.product.id)),
@@ -47,7 +57,11 @@ export function CartPage() {
   const selectedSubtotal = Number(selectedItems.reduce((s, i) => s + i.lineTotal, 0).toFixed(2));
   const selectedCount = selectedItems.reduce((s, i) => s + i.quantity, 0);
 
-  const fee = Number((selectedSubtotal * (installmentOptions.find((o) => o.months === selectedPlan)?.rate ?? 0)).toFixed(2));
+  const fee = Number(
+    (
+      selectedSubtotal * (installmentOptions.find((o) => o.months === selectedPlan)?.rate ?? 0)
+    ).toFixed(2),
+  );
   const total = Number((selectedSubtotal + fee).toFixed(2));
   const minEligible = selectedSubtotal >= 100;
   const ineligibleItems = selectedItems.filter((item) => item.lineTotal < 100);
@@ -72,29 +86,30 @@ export function CartPage() {
   const reload = useCallback(() => {
     void Promise.all([fetchCart(), fetchOrders()])
       .then(([cartResult, orderResult]) => {
-        if (cartResult.success && cartResult.cart) setCart(cartResult.cart);
+        if (cartResult.success && cartResult.cart) applyCart(cartResult.cart);
         else if (cartResult.error?.code === "AUTH_REQUIRED") setAuthRequired(true);
         if (orderResult.success) setOrderCount(orderResult.count ?? 0);
       })
       .catch(() => setError("Could not load cart data."));
-  }, []);
+  }, [applyCart]);
 
   useEffect(reload, [reload]);
   useWebMCPSync(reload);
 
   useEffect(() => {
-    (window as unknown as { __procuraPageContext?: Record<string, unknown> }).__procuraPageContext = {
-      page: "cart",
-      itemCount: cart.itemCount,
-      subtotal: cart.subtotal,
-      items: cart.items.map((i) => ({
-        productId: i.product.id,
-        name: i.product.name,
-        quantity: i.quantity,
-        lineTotal: i.lineTotal,
-        addedBy: i.addedBy ?? "user",
-      })),
-    };
+    (window as unknown as { __procuraPageContext?: Record<string, unknown> }).__procuraPageContext =
+      {
+        page: "cart",
+        itemCount: cart.itemCount,
+        subtotal: cart.subtotal,
+        items: cart.items.map((i) => ({
+          productId: i.product.id,
+          name: i.product.name,
+          quantity: i.quantity,
+          lineTotal: i.lineTotal,
+          addedBy: i.addedBy ?? "user",
+        })),
+      };
     return () => {
       (window as unknown as { __procuraPageContext?: null }).__procuraPageContext = null;
     };
@@ -102,7 +117,7 @@ export function CartPage() {
 
   const update = async (productId: string, quantity: number) => {
     const result = await mutateCart(quantity < 1 ? "remove" : "update", productId, quantity);
-    if (result.success && result.cart) setCart(result.cart);
+    if (result.success && result.cart) applyCart(result.cart);
     else setError(result.error?.message ?? "Cart update failed.");
   };
 
@@ -163,11 +178,7 @@ export function CartPage() {
               <section className="cart-page-lines">
                 <div className="cart-select-all">
                   <label>
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={toggleAll}
-                    />
+                    <input type="checkbox" checked={allSelected} onChange={toggleAll} />
                     <span>Select all ({cart.items.length})</span>
                   </label>
                 </div>
@@ -204,7 +215,7 @@ export function CartPage() {
                         <button
                           onClick={() =>
                             mutateCart("add", item.product.id, 1).then(
-                              (result) => result.success && result.cart && setCart(result.cart),
+                              (result) => result.success && result.cart && applyCart(result.cart),
                             )
                           }
                           aria-label={`Increase ${item.product.name}`}
@@ -230,7 +241,9 @@ export function CartPage() {
                   <span>Order summary</span>
                   <p>
                     <span>Selected items</span>
-                    <strong>{selectedCount} of {cart.itemCount}</strong>
+                    <strong>
+                      {selectedCount} of {cart.itemCount}
+                    </strong>
                   </p>
                   <p>
                     <span>Subtotal</span>

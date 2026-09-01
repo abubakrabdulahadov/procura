@@ -1,6 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { products } from "@/lib/data/mock";
 import { checkProductAvailability } from "@/lib/procurement/product-intelligence";
+import { validateApprovedOrder } from "@/lib/procurement/order-validation";
 import { db } from "@/lib/server/database";
 import { budgets, carts, orderProposals, orders } from "@/lib/server/schema";
 import type { ActionSource, Cart, Order, OrderProposal } from "@/types/procurement";
@@ -82,7 +83,10 @@ export async function mutateUserCart(
     };
   if (action === "add") {
     const prev = entries[productId] ? entryQty(entries[productId]) : 0;
-    entries[productId] = { qty: prev + (quantity ?? 0), src: prev === 0 ? source : entrySrc(entries[productId] ?? 0) };
+    entries[productId] = {
+      qty: prev + (quantity ?? 0),
+      src: prev === 0 ? source : entrySrc(entries[productId] ?? 0),
+    };
   }
   if (action === "update") {
     if (!entries[productId])
@@ -101,8 +105,13 @@ export async function mutateUserCart(
     delete entries[productId];
   }
   const updatedAt = new Date().toISOString();
-  if (!row) await db.insert(carts).values({ userId, quantitiesJson: JSON.stringify(entries), updatedAt });
-  else await db.update(carts).set({ quantitiesJson: JSON.stringify(entries), updatedAt }).where(eq(carts.userId, userId));
+  if (!row)
+    await db.insert(carts).values({ userId, quantitiesJson: JSON.stringify(entries), updatedAt });
+  else
+    await db
+      .update(carts)
+      .set({ quantitiesJson: JSON.stringify(entries), updatedAt })
+      .where(eq(carts.userId, userId));
   const cart = await getUserCart(userId);
   const message =
     action === "add"
@@ -113,7 +122,12 @@ export async function mutateUserCart(
   return { success: true as const, cart, message };
 }
 
-export async function prepareUserOrder(userId: string, installmentMonths?: number, productIds?: string[], source: ActionSource = "user") {
+export async function prepareUserOrder(
+  userId: string,
+  installmentMonths?: number,
+  productIds?: string[],
+  source: ActionSource = "user",
+) {
   const fullCart = await getUserCart(userId);
   if (!fullCart.items.length)
     return {
@@ -277,6 +291,15 @@ export async function placeUserOrder(userId: string, proposalId: string) {
       },
     };
   const proposal = JSON.parse(row.proposalJson) as OrderProposal;
+  const currentCart = await getUserCart(userId);
+  const budget = await getUserBudget(userId);
+  const validationError = validateApprovedOrder(
+    proposal,
+    currentCart,
+    budget,
+    checkProductAvailability,
+  );
+  if (validationError) return { success: false as const, error: validationError };
   const order: Order = {
     id: `ORD-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
     proposalId,
@@ -330,9 +353,7 @@ export async function getUserBudget(userId: string) {
     .where(eq(budgets.userId, userId));
   const limit = row ? Number(row.limitAmount) : 0;
   const allOrders = await listUserOrders(userId);
-  const spent = allOrders
-    .filter((o) => o.status === "placed")
-    .reduce((sum, o) => sum + o.total, 0);
+  const spent = allOrders.filter((o) => o.status === "placed").reduce((sum, o) => sum + o.total, 0);
   return {
     limit: Number(limit.toFixed(2)),
     spent: Number(spent.toFixed(2)),
@@ -358,7 +379,11 @@ export async function setUserBudget(userId: string, amount: number) {
   return getUserBudget(userId);
 }
 
-export async function previewUserOrder(userId: string, installmentMonths?: number, productIds?: string[]) {
+export async function previewUserOrder(
+  userId: string,
+  installmentMonths?: number,
+  productIds?: string[],
+) {
   const fullCart = await getUserCart(userId);
   if (!fullCart.items.length)
     return {
@@ -374,7 +399,8 @@ export async function previewUserOrder(userId: string, installmentMonths?: numbe
       error: { code: "EMPTY_CART", message: "None of the selected products are in the cart." },
     };
   const subtotal = Number(selectedItems.reduce((s, i) => s + i.lineTotal, 0).toFixed(2));
-  const validInstallment = installmentMonths !== undefined && [3, 6, 12, 24].includes(installmentMonths);
+  const validInstallment =
+    installmentMonths !== undefined && [3, 6, 12, 24].includes(installmentMonths);
   const rate = installmentMonths === 12 ? 0.04 : installmentMonths === 24 ? 0.09 : 0;
   const paymentFee = validInstallment ? Number((subtotal * rate).toFixed(2)) : 0;
   const total = Number((subtotal + paymentFee).toFixed(2));
@@ -399,17 +425,30 @@ export async function previewUserOrder(userId: string, installmentMonths?: numbe
       paymentFee,
       total,
       installmentEligible,
-      monthlyPayment: validInstallment && installmentMonths ? Number((total / installmentMonths).toFixed(2)) : null,
+      monthlyPayment:
+        validInstallment && installmentMonths
+          ? Number((total / installmentMonths).toFixed(2))
+          : null,
       budgetStatus: budget.hasLimit
-        ? { withinBudget: total <= budget.remaining, remaining: budget.remaining, limit: budget.limit }
+        ? {
+            withinBudget: total <= budget.remaining,
+            remaining: budget.remaining,
+            limit: budget.limit,
+          }
         : { withinBudget: true, remaining: null, limit: null },
-      deliveryMinDays: ranges.length > 0 ? Math.max(...ranges.map((r) => r.availability.deliveryMinDays)) : 0,
-      deliveryMaxDays: ranges.length > 0 ? Math.max(...ranges.map((r) => r.availability.deliveryMaxDays)) : 0,
+      deliveryMinDays:
+        ranges.length > 0 ? Math.max(...ranges.map((r) => r.availability.deliveryMinDays)) : 0,
+      deliveryMaxDays:
+        ranges.length > 0 ? Math.max(...ranges.map((r) => r.availability.deliveryMaxDays)) : 0,
     },
   };
 }
 
-export async function restoreCancelledOrder(userId: string, orderId: string, source: ActionSource = "agent") {
+export async function restoreCancelledOrder(
+  userId: string,
+  orderId: string,
+  source: ActionSource = "agent",
+) {
   const [row] = await db
     .select({ orderJson: orders.orderJson })
     .from(orders)
@@ -423,7 +462,10 @@ export async function restoreCancelledOrder(userId: string, orderId: string, sou
   if (order.status !== "cancelled")
     return {
       success: false as const,
-      error: { code: "ORDER_NOT_CANCELLED", message: `Order ${orderId} is not cancelled — only cancelled orders can be restored to cart.` },
+      error: {
+        code: "ORDER_NOT_CANCELLED",
+        message: `Order ${orderId} is not cancelled — only cancelled orders can be restored to cart.`,
+      },
     };
   const results: { productId: string; name: string; success: boolean; message?: string }[] = [];
   for (const item of order.items) {
@@ -446,7 +488,11 @@ export async function restoreCancelledOrder(userId: string, orderId: string, sou
   };
 }
 
-export async function reorderFromOrder(userId: string, orderId: string, source: ActionSource = "agent") {
+export async function reorderFromOrder(
+  userId: string,
+  orderId: string,
+  source: ActionSource = "agent",
+) {
   const [row] = await db
     .select({ orderJson: orders.orderJson })
     .from(orders)
@@ -457,7 +503,13 @@ export async function reorderFromOrder(userId: string, orderId: string, source: 
       error: { code: "ORDER_NOT_FOUND", message: `No order exists with ID ${orderId}.` },
     };
   const order = JSON.parse(row.orderJson) as Order;
-  const results: { productId: string; name: string; quantity: number; success: boolean; message?: string }[] = [];
+  const results: {
+    productId: string;
+    name: string;
+    quantity: number;
+    success: boolean;
+    message?: string;
+  }[] = [];
   for (const item of order.items) {
     const res = await mutateUserCart(userId, "add", item.product.id, item.quantity, source);
     results.push({
@@ -480,7 +532,11 @@ export async function reorderFromOrder(userId: string, orderId: string, source: 
   };
 }
 
-export async function cancelUserOrder(userId: string, orderId: string, source: ActionSource = "user") {
+export async function cancelUserOrder(
+  userId: string,
+  orderId: string,
+  source: ActionSource = "user",
+) {
   const [row] = await db
     .select({ orderJson: orders.orderJson })
     .from(orders)
