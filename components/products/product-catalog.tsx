@@ -201,7 +201,7 @@ export function ProductCatalog() {
                         <ProductVisual product={product} />
                         <span className="category-badge">{product.category}</span>
                         {highlightedIds.has(product.id) && (
-                          <span className="recommended-badge">Recommended</span>
+                          <span className="recommended-badge">✦ AI Recommended</span>
                         )}
                       </div>
                       <div className="commerce-body">
