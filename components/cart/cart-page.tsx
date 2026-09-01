@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { CommerceHeader } from "@/components/layout/commerce-header";
@@ -34,12 +34,40 @@ export function CartPage() {
   const [placing, setPlacing] = useState(false);
   const [checkout, setCheckout] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<InstallmentOption | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const fee = Number((cart.subtotal * (installmentOptions.find((o) => o.months === selectedPlan)?.rate ?? 0)).toFixed(2));
-  const total = Number((cart.subtotal + fee).toFixed(2));
-  const minEligible = cart.subtotal >= 100;
-  const ineligibleItems = cart.items.filter((item) => item.lineTotal < 100);
+  useEffect(() => {
+    setSelectedIds(new Set(cart.items.map((i) => i.product.id)));
+  }, [cart.items.length]);
+
+  const selectedItems = useMemo(
+    () => cart.items.filter((i) => selectedIds.has(i.product.id)),
+    [cart.items, selectedIds],
+  );
+  const selectedSubtotal = Number(selectedItems.reduce((s, i) => s + i.lineTotal, 0).toFixed(2));
+  const selectedCount = selectedItems.reduce((s, i) => s + i.quantity, 0);
+
+  const fee = Number((selectedSubtotal * (installmentOptions.find((o) => o.months === selectedPlan)?.rate ?? 0)).toFixed(2));
+  const total = Number((selectedSubtotal + fee).toFixed(2));
+  const minEligible = selectedSubtotal >= 100;
+  const ineligibleItems = selectedItems.filter((item) => item.lineTotal < 100);
   const eligible = minEligible && ineligibleItems.length === 0;
+
+  const allSelected = selectedIds.size === cart.items.length;
+
+  const toggleItem = (productId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(cart.items.map((i) => i.product.id)));
+  };
 
   const reload = useCallback(() => {
     void Promise.all([fetchCart(), fetchOrders()])
@@ -78,11 +106,12 @@ export function CartPage() {
   };
 
   const confirmOrder = async () => {
-    if (placing) return;
+    if (placing || selectedItems.length === 0) return;
     setPlacing(true);
     setError(null);
+    const productIds = allSelected ? undefined : selectedItems.map((i) => i.product.id);
     try {
-      const prepared = await prepareOrderRequest(selectedPlan ?? undefined);
+      const prepared = await prepareOrderRequest(selectedPlan ?? undefined, productIds);
       if (!prepared.success || !prepared.proposal)
         return setError(prepared.error?.message ?? "Could not prepare order.");
       const approved = await approveOrderRequest(prepared.proposal.id);
@@ -90,8 +119,13 @@ export function CartPage() {
         return setError(approved.error?.message ?? "Could not approve order.");
       const result = await placeOrderRequest(approved.proposal.id);
       if (!result.success) return setError(result.error?.message ?? "Could not place order.");
-      router.push("/orders");
-      router.refresh();
+      if (productIds) {
+        reload();
+        setCheckout(false);
+      } else {
+        router.push("/orders");
+        router.refresh();
+      }
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -107,7 +141,7 @@ export function CartPage() {
           <div className="standalone-heading">
             <span>Your purchase</span>
             <h1>Shopping cart</h1>
-            <p>Review quantities and place the order when you are ready.</p>
+            <p>Select items and place the order when you are ready.</p>
           </div>
           {authRequired ? (
             <section className="standalone-empty">
@@ -126,61 +160,81 @@ export function CartPage() {
           ) : (
             <div className="cart-page-layout">
               <section className="cart-page-lines">
-                {cart.items.map((item) => (
-                  <article key={item.product.id}>
-                    <div className="cart-page-glyph">
-                      <ProductVisual product={item.product} compact />
-                    </div>
-                    <div>
-                      <span>{item.product.brand}</span>
-                      <h2>{item.product.name}</h2>
-                      <p>${item.unitPrice.toFixed(2)} per unit</p>
-                    </div>
-                    <div className="cart-page-quantity">
+                <div className="cart-select-all">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleAll}
+                    />
+                    <span>Select all ({cart.items.length})</span>
+                  </label>
+                </div>
+                {cart.items.map((item) => {
+                  const isSelected = selectedIds.has(item.product.id);
+                  return (
+                    <article key={item.product.id} className={isSelected ? "" : "cart-item-dimmed"}>
+                      <label className="cart-item-check">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleItem(item.product.id)}
+                        />
+                      </label>
+                      <div className="cart-page-glyph">
+                        <ProductVisual product={item.product} compact />
+                      </div>
+                      <div>
+                        <span>{item.product.brand}</span>
+                        <h2>{item.product.name}</h2>
+                        <p>${item.unitPrice.toFixed(2)} per unit</p>
+                      </div>
+                      <div className="cart-page-quantity">
+                        <button
+                          onClick={() => update(item.product.id, item.quantity - 1)}
+                          aria-label={`Decrease ${item.product.name}`}
+                        >
+                          <Minus />
+                        </button>
+                        <strong>{item.quantity}</strong>
+                        <button
+                          onClick={() =>
+                            mutateCart("add", item.product.id, 1).then(
+                              (result) => result.success && result.cart && setCart(result.cart),
+                            )
+                          }
+                          aria-label={`Increase ${item.product.name}`}
+                        >
+                          <Plus />
+                        </button>
+                      </div>
+                      <strong className="cart-page-total">${item.lineTotal.toFixed(2)}</strong>
                       <button
-                        onClick={() => update(item.product.id, item.quantity - 1)}
-                        aria-label={`Decrease ${item.product.name}`}
+                        className="cart-page-remove"
+                        onClick={() => update(item.product.id, 0)}
+                        aria-label={`Remove ${item.product.name}`}
                       >
-                        <Minus />
+                        <Trash2 />
                       </button>
-                      <strong>{item.quantity}</strong>
-                      <button
-                        onClick={() =>
-                          mutateCart("add", item.product.id, 1).then(
-                            (result) => result.success && result.cart && setCart(result.cart),
-                          )
-                        }
-                        aria-label={`Increase ${item.product.name}`}
-                      >
-                        <Plus />
-                      </button>
-                    </div>
-                    <strong className="cart-page-total">${item.lineTotal.toFixed(2)}</strong>
-                    <button
-                      className="cart-page-remove"
-                      onClick={() => update(item.product.id, 0)}
-                      aria-label={`Remove ${item.product.name}`}
-                    >
-                      <Trash2 />
-                    </button>
-                  </article>
-                ))}
+                    </article>
+                  );
+                })}
               </section>
 
               {!checkout ? (
                 <aside className="cart-summary">
                   <span>Order summary</span>
                   <p>
-                    <span>Items</span>
-                    <strong>{cart.itemCount}</strong>
+                    <span>Selected items</span>
+                    <strong>{selectedCount} of {cart.itemCount}</strong>
                   </p>
                   <p>
                     <span>Subtotal</span>
-                    <strong>${cart.subtotal.toFixed(2)}</strong>
+                    <strong>${selectedSubtotal.toFixed(2)}</strong>
                   </p>
                   <div>
                     <span>Total</span>
-                    <strong>${cart.subtotal.toFixed(2)}</strong>
+                    <strong>${selectedSubtotal.toFixed(2)}</strong>
                   </div>
                   {error && (
                     <p className="cart-order-error" role="alert">
@@ -193,10 +247,17 @@ export function CartPage() {
                       setError(null);
                       setSelectedPlan(null);
                     }}
+                    disabled={selectedItems.length === 0}
                   >
-                    Place order
+                    {selectedItems.length === 0
+                      ? "Select items to order"
+                      : `Place order (${selectedItems.length} item${selectedItems.length > 1 ? "s" : ""})`}
                   </button>
-                  <small>You will choose payment terms before confirming.</small>
+                  <small>
+                    {selectedItems.length < cart.items.length
+                      ? "Only selected items will be ordered."
+                      : "You will choose payment terms before confirming."}
+                  </small>
                 </aside>
               ) : (
                 <aside className="cart-summary checkout-step">
@@ -246,8 +307,12 @@ export function CartPage() {
                   )}
 
                   <p>
+                    <span>Selected items</span>
+                    <strong>{selectedCount}</strong>
+                  </p>
+                  <p>
                     <span>Subtotal</span>
-                    <strong>${cart.subtotal.toFixed(2)}</strong>
+                    <strong>${selectedSubtotal.toFixed(2)}</strong>
                   </p>
                   {fee > 0 && (
                     <p>

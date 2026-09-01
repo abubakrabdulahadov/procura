@@ -415,10 +415,15 @@ const authTools: ToolDef[] = [
     name: "place_order",
     title: "Place Order",
     description:
-      "Place an order from cart. Installments (3, 6, 12, 24 months) require each item's line total >= $100. Fees: 3/6mo 0%, 12mo 4%, 24mo 9%. Blocked if it exceeds the user's budget.",
+      "Place an order from cart. Pass productIds to order specific items only — omit to order everything. Installments (3, 6, 12, 24 months) require each item's line total >= $100. Fees: 3/6mo 0%, 12mo 4%, 24mo 9%. Blocked if it exceeds the user's budget.",
     inputSchema: {
       type: "object",
       properties: {
+        productIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Product IDs to order. Omit to order all cart items.",
+        },
         installmentMonths: {
           type: "number",
           enum: [3, 6, 12, 24],
@@ -430,6 +435,7 @@ const authTools: ToolDef[] = [
     execute: traced("place_order", "Place Order", async (input) => {
       const prepared = await postJson("/api/orders/prepare", {
         installmentMonths: input.installmentMonths,
+        productIds: input.productIds,
       });
       if (!prepared.success) return json(prepared);
 

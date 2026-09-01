@@ -8,7 +8,7 @@ export async function POST(request: Request) {
       { success: false, error: { code: "AUTH_REQUIRED", message: "Sign in to prepare an order." } },
       { status: 401 },
     );
-  const body = (await request.json().catch(() => ({}))) as { installmentMonths?: number };
-  const result = await prepareUserOrder(user.id, body.installmentMonths);
+  const body = (await request.json().catch(() => ({}))) as { installmentMonths?: number; productIds?: string[] };
+  const result = await prepareUserOrder(user.id, body.installmentMonths, body.productIds);
   return NextResponse.json(result, { status: result.success ? 200 : 400 });
 }

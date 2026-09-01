@@ -40,12 +40,12 @@ export async function mutateCart(
     error?: { code: string; message: string };
   };
 }
-export async function prepareOrderRequest(installmentMonths?: number) {
+export async function prepareOrderRequest(installmentMonths?: number, productIds?: string[]) {
   return (
     await jsonRequest("/api/orders/prepare", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ installmentMonths }),
+      body: JSON.stringify({ installmentMonths, productIds }),
     })
   ).data as {
     success: boolean;

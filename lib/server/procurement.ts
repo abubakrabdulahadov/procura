@@ -98,13 +98,29 @@ export async function mutateUserCart(
   return { success: true as const, cart, message };
 }
 
-export async function prepareUserOrder(userId: string, installmentMonths?: number) {
-  const cart = await getUserCart(userId);
-  if (!cart.items.length)
+export async function prepareUserOrder(userId: string, installmentMonths?: number, productIds?: string[]) {
+  const fullCart = await getUserCart(userId);
+  if (!fullCart.items.length)
     return {
       success: false as const,
       error: { code: "EMPTY_CART", message: "Add at least one product before preparing an order." },
     };
+  const selectedItems = productIds
+    ? fullCart.items.filter((item) => productIds.includes(item.product.id))
+    : fullCart.items;
+  if (selectedItems.length === 0)
+    return {
+      success: false as const,
+      error: { code: "EMPTY_CART", message: "None of the selected products are in the cart." },
+    };
+  const subtotal = Number(selectedItems.reduce((s, i) => s + i.lineTotal, 0).toFixed(2));
+  const orderCart: Cart = {
+    id: fullCart.id,
+    items: selectedItems,
+    itemCount: selectedItems.reduce((s, i) => s + i.quantity, 0),
+    subtotal,
+    updatedAt: fullCart.updatedAt,
+  };
   if (installmentMonths !== undefined && ![3, 6, 12, 24].includes(installmentMonths))
     return {
       success: false as const,
@@ -113,7 +129,7 @@ export async function prepareUserOrder(userId: string, installmentMonths?: numbe
         message: "installmentMonths must be 3, 6, 12, or 24.",
       },
     };
-  if (installmentMonths !== undefined && cart.subtotal < 100)
+  if (installmentMonths !== undefined && subtotal < 100)
     return {
       success: false as const,
       error: {
@@ -122,7 +138,7 @@ export async function prepareUserOrder(userId: string, installmentMonths?: numbe
       },
     };
   if (installmentMonths !== undefined) {
-    const ineligible = cart.items.filter((item) => item.lineTotal < 100);
+    const ineligible = selectedItems.filter((item) => item.lineTotal < 100);
     if (ineligible.length > 0)
       return {
         success: false as const,
@@ -134,8 +150,8 @@ export async function prepareUserOrder(userId: string, installmentMonths?: numbe
   }
   const budget = await getUserBudget(userId);
   const rate = installmentMonths === 12 ? 0.04 : installmentMonths === 24 ? 0.09 : 0;
-  const paymentFee = Number((cart.subtotal * rate).toFixed(2));
-  const orderTotal = Number((cart.subtotal + paymentFee).toFixed(2));
+  const paymentFee = Number((subtotal * rate).toFixed(2));
+  const orderTotal = Number((subtotal + paymentFee).toFixed(2));
   if (budget.hasLimit && orderTotal > budget.remaining)
     return {
       success: false as const,
@@ -144,16 +160,16 @@ export async function prepareUserOrder(userId: string, installmentMonths?: numbe
         message: `This order ($${orderTotal.toFixed(2)}) exceeds your remaining budget of $${budget.remaining.toFixed(2)} (limit: $${budget.limit.toFixed(2)}, spent: $${budget.spent.toFixed(2)}).`,
       },
     };
-  const ranges = cart.items
+  const ranges = selectedItems
     .map((item) => checkProductAvailability(item.product.id, item.quantity))
     .filter((item) => item.success);
   const proposal: OrderProposal = {
     id: `proposal-${crypto.randomUUID()}`,
-    cart,
-    subtotal: cart.subtotal,
+    cart: orderCart,
+    subtotal,
     installmentMonths: installmentMonths as 3 | 6 | 12 | 24 | undefined,
     paymentFee,
-    total: Number((cart.subtotal + paymentFee).toFixed(2)),
+    total: orderTotal,
     deliveryMinDays:
       ranges.length > 0 ? Math.max(...ranges.map((item) => item.availability.deliveryMinDays)) : 0,
     deliveryMaxDays:
@@ -245,15 +261,6 @@ export async function placeUserOrder(userId: string, proposalId: string) {
       },
     };
   const proposal = JSON.parse(row.proposalJson) as OrderProposal;
-  const current = await getUserCart(userId);
-  if (current.updatedAt !== proposal.cart.updatedAt || current.subtotal !== proposal.cart.subtotal)
-    return {
-      success: false as const,
-      error: {
-        code: "CART_CHANGED_AFTER_APPROVAL",
-        message: "The cart changed after approval. Prepare a new proposal.",
-      },
-    };
   const order: Order = {
     id: `ORD-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
     proposalId,
@@ -265,6 +272,13 @@ export async function placeUserOrder(userId: string, proposalId: string) {
     status: "placed",
     createdAt: new Date().toISOString(),
   };
+  const orderedIds = new Set(proposal.cart.items.map((i) => i.product.id));
+  const current = await getUserCart(userId);
+  const remaining = Object.fromEntries(
+    current.items
+      .filter((i) => !orderedIds.has(i.product.id))
+      .map((i) => [i.product.id, i.quantity]),
+  );
   await db.transaction(async (tx) => {
     await tx.insert(orders).values({
       id: order.id,
@@ -275,7 +289,7 @@ export async function placeUserOrder(userId: string, proposalId: string) {
     });
     await tx
       .update(carts)
-      .set({ quantitiesJson: "{}", updatedAt: new Date().toISOString() })
+      .set({ quantitiesJson: JSON.stringify(remaining), updatedAt: new Date().toISOString() })
       .where(eq(carts.userId, userId));
   });
   return { success: true as const, order, message: `Order ${order.id} placed.` };

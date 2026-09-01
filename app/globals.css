@@ -3541,14 +3541,44 @@ summary:focus-visible {
   background: rgba(255, 255, 255, 0.56);
   box-shadow: inset 0 1px 0 #fff;
 }
+.cart-select-all {
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(63, 95, 80, 0.09);
+}
+.cart-select-all label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 8px;
+  font-weight: 650;
+  color: #5a6e65;
+  cursor: pointer;
+}
+.cart-item-check {
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.cart-select-all input,
+.cart-item-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #236b49;
+  cursor: pointer;
+}
+.cart-item-dimmed {
+  opacity: 0.45;
+}
 .cart-page-lines article {
   min-height: 100px;
   padding: 16px;
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr) auto auto 34px;
+  grid-template-columns: 20px 54px minmax(0, 1fr) auto auto 34px;
   align-items: center;
   gap: 15px;
   border-bottom: 1px solid rgba(63, 95, 80, 0.09);
+  transition: opacity 0.15s ease;
 }
 .cart-page-lines article:last-child {
   border-bottom: 0;
@@ -3888,7 +3918,7 @@ summary:focus-visible {
     grid-template-columns: 1fr;
   }
   .cart-page-lines article {
-    grid-template-columns: 45px 1fr auto;
+    grid-template-columns: 20px 45px 1fr auto;
     gap: 10px;
   }
   .cart-page-glyph {
