@@ -331,6 +331,32 @@ const publicTools: ToolDef[] = [
       return json({ success: true, ...ctx });
     }),
   },
+  {
+    name: "compare_products",
+    title: "Compare Products",
+    description:
+      "Open a side-by-side comparison panel for 2-4 products on the catalog page. Shows price, specs, rating in a table so the user can visually compare. Call with an empty array to close. User must be on the catalog page.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        productIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Product IDs to compare (2-4 recommended)",
+        },
+      },
+      required: ["productIds"],
+    },
+    annotations: { readOnlyHint: true },
+    execute: traced("compare_products", "Compare Products", async (input) => {
+      const ids = input.productIds as string[];
+      window.dispatchEvent(
+        new CustomEvent("webmcp:compare", { detail: { productIds: ids } }),
+      );
+      if (ids.length === 0) return json({ success: true, message: "Comparison closed." });
+      return json({ success: true, comparing: ids.length, productIds: ids });
+    }),
+  },
 ];
 
 const authTools: ToolDef[] = [
@@ -635,6 +661,28 @@ const authTools: ToolDef[] = [
         installmentMonths: input.installmentMonths,
       })),
     ),
+  },
+  {
+    name: "reorder",
+    title: "Reorder",
+    description:
+      "Re-add all items from a previous order to the cart. Works on any order (placed or cancelled). Items are added with their original quantities. Use place_order afterwards to complete the reorder.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        orderId: { type: "string", description: "Order ID to reorder from" },
+      },
+      required: ["orderId"],
+    },
+    annotations: { readOnlyHint: false },
+    execute: traced("reorder", "Reorder", async (input) => {
+      const result = await postJson("/api/orders/reorder", {
+        orderId: input.orderId,
+        source: "agent",
+      });
+      emit();
+      return json(result);
+    }),
   },
 ];
 

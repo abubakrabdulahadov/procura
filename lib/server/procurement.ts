@@ -446,6 +446,40 @@ export async function restoreCancelledOrder(userId: string, orderId: string, sou
   };
 }
 
+export async function reorderFromOrder(userId: string, orderId: string, source: ActionSource = "agent") {
+  const [row] = await db
+    .select({ orderJson: orders.orderJson })
+    .from(orders)
+    .where(and(eq(orders.id, orderId), eq(orders.userId, userId)));
+  if (!row)
+    return {
+      success: false as const,
+      error: { code: "ORDER_NOT_FOUND", message: `No order exists with ID ${orderId}.` },
+    };
+  const order = JSON.parse(row.orderJson) as Order;
+  const results: { productId: string; name: string; quantity: number; success: boolean; message?: string }[] = [];
+  for (const item of order.items) {
+    const res = await mutateUserCart(userId, "add", item.product.id, item.quantity, source);
+    results.push({
+      productId: item.product.id,
+      name: item.product.name,
+      quantity: item.quantity,
+      success: res.success,
+      message: res.success ? undefined : res.error?.message,
+    });
+  }
+  const added = results.filter((r) => r.success).length;
+  return {
+    success: true as const,
+    orderId,
+    originalTotal: order.total,
+    added,
+    total: order.items.length,
+    results,
+    message: `${added} of ${order.items.length} items from order ${orderId} added to cart for reorder.`,
+  };
+}
+
 export async function cancelUserOrder(userId: string, orderId: string, source: ActionSource = "user") {
   const [row] = await db
     .select({ orderJson: orders.orderJson })

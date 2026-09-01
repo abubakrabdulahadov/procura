@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
 import { CommerceHeader } from "@/components/layout/commerce-header";
 import { GlassSelect } from "@/components/ui/glass-select";
+import { ComparePanel } from "@/components/products/compare-panel";
 import { ProductDetail } from "@/components/products/product-detail";
 import { ProductVisual } from "@/components/products/product-visual";
 import { emptyCart, fetchCart, fetchOrders, mutateCart } from "@/lib/procurement/client";
@@ -248,6 +249,7 @@ export function ProductCatalog() {
           onAddToCart={addItem}
         />
       )}
+      <ComparePanel />
     </div>
   );
 }
