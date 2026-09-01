@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { WebMCPProvider } from "@/components/webmcp/webmcp-provider";
 import { AgentActivity } from "@/components/webmcp/agent-activity";
 import { ComparePanel } from "@/components/products/compare-panel";
+import { OrderApproval } from "@/components/webmcp/order-approval";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <WebMCPProvider />
         <AgentActivity />
         <ComparePanel />
+        <OrderApproval />
         {children}
       </body>
     </html>

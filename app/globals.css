@@ -4619,6 +4619,158 @@ summary:focus-visible {
   }
 }
 
+/* ── Agent Order Approval ── */
+.approval-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(12, 24, 19, 0.5);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fade-in 0.18s ease;
+}
+.approval-panel {
+  width: 100%;
+  max-width: 420px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--glass-strong);
+  backdrop-filter: blur(26px);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  animation: approval-rise 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+@keyframes approval-rise {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.approval-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 0;
+}
+.approval-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.14), rgba(139, 92, 246, 0.14));
+  color: #5b21b6;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+.approval-dismiss {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.approval-dismiss:hover:not(:disabled) { background: rgba(0, 0, 0, 0.04); }
+.approval-dismiss:disabled { opacity: 0.4; cursor: default; }
+.approval-body {
+  padding: 12px 20px 4px;
+  overflow-y: auto;
+}
+.approval-body h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.approval-sub {
+  margin: 5px 0 14px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.approval-items {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.approval-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  font-size: 10.5px;
+  background: rgba(255, 255, 255, 0.4);
+}
+.approval-item + .approval-item { border-top: 1px solid rgba(0, 0, 0, 0.05); }
+.approval-item small {
+  display: block;
+  font-size: 8.5px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.approval-item strong { white-space: nowrap; font-weight: 660; }
+.approval-lines { margin: 0 0 12px; display: grid; gap: 6px; }
+.approval-lines div { display: flex; justify-content: space-between; gap: 12px; }
+.approval-lines dt { font-size: 10px; color: var(--muted); }
+.approval-lines dd { margin: 0; font-size: 10px; font-weight: 640; }
+.approval-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--green-soft);
+  border: 1px solid rgba(36, 142, 94, 0.16);
+}
+.approval-total span { font-size: 10px; font-weight: 640; color: var(--green); }
+.approval-total strong { font-size: 17px; font-weight: 720; letter-spacing: -0.02em; }
+.approval-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr;
+  gap: 8px;
+  padding: 14px 20px 18px;
+}
+.approval-actions button {
+  height: 38px;
+  border-radius: 11px;
+  font-size: 10.5px;
+  font-weight: 680;
+  cursor: pointer;
+  transition: filter 0.15s, background 0.15s;
+}
+.approval-actions button:disabled { opacity: 0.55; cursor: default; }
+.approval-reject {
+  border: 1px solid rgba(185, 28, 28, 0.18);
+  background: rgba(185, 28, 28, 0.05);
+  color: #b91c1c;
+}
+.approval-reject:hover:not(:disabled) { background: rgba(185, 28, 28, 0.1); }
+.approval-approve {
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, #17805a, #0f6444);
+  color: #fff;
+}
+.approval-approve:hover:not(:disabled) { filter: brightness(1.08); }
+@media (max-width: 620px) {
+  .approval-overlay { padding: 12px; align-items: flex-end; }
+  .approval-panel { max-width: 100%; border-radius: 16px; }
+}
+
 /* ── Compare Panel ── */
 .compare-overlay {
   position: fixed;

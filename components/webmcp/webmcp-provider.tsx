@@ -85,12 +85,12 @@ function emitToolEnd(id: number, name: string, success: boolean) {
 function traced(
   name: string,
   title: string | undefined,
-  fn: (input: ToolInput) => Promise<string>,
+  fn: (input: ToolInput, context: ToolExecuteContext) => Promise<string>,
 ): (input: ToolInput, context: ToolExecuteContext) => Promise<string> {
-  return async (input, _context) => {
+  return async (input, context) => {
     const id = emitToolStart(name, title, input);
     try {
-      const result = await fn(input);
+      const result = await fn(input, context);
       const parsed = JSON.parse(result);
       const ok =
         parsed && typeof parsed === "object" && "success" in parsed
@@ -107,6 +107,75 @@ function traced(
 
 function json(data: unknown): string {
   return JSON.stringify(data);
+}
+
+const APPROVAL_TIMEOUT_MS = 120_000;
+let approvalSeq = 0;
+
+interface ApprovalOutcome {
+  requestId: string;
+  decision: "approve" | "reject" | "timeout" | "cancelled";
+}
+
+/**
+ * Hands a prepared proposal to the human and waits for their decision.
+ *
+ * The agent cannot approve on the user's behalf: the only thing that resolves
+ * this promise as approved is a click in the page's own approval panel.
+ */
+function requestHumanApproval(
+  proposal: unknown,
+  signal: AbortSignal | undefined,
+): Promise<ApprovalOutcome> {
+  return new Promise((resolve) => {
+    const requestId = `approval-${++approvalSeq}`;
+    let settled = false;
+
+    const settle = (decision: ApprovalOutcome["decision"]) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener("webmcp:approval-response", onResponse);
+      signal?.removeEventListener("abort", onAbort);
+      clearTimeout(timer);
+      resolve({ requestId, decision });
+    };
+
+    const onResponse = (e: Event) => {
+      const detail = (e as CustomEvent).detail as {
+        requestId: string;
+        decision: "approve" | "reject";
+      };
+      if (detail.requestId !== requestId) return;
+      settle(detail.decision);
+    };
+
+    const dismiss = () =>
+      window.dispatchEvent(
+        new CustomEvent("webmcp:approval-cancel", { detail: { requestId } }),
+      );
+
+    const onAbort = () => {
+      dismiss();
+      settle("cancelled");
+    };
+
+    const timer = setTimeout(() => {
+      dismiss();
+      settle("timeout");
+    }, APPROVAL_TIMEOUT_MS);
+
+    window.addEventListener("webmcp:approval-response", onResponse);
+    signal?.addEventListener("abort", onAbort);
+    window.dispatchEvent(
+      new CustomEvent("webmcp:approval-request", { detail: { requestId, proposal } }),
+    );
+  });
+}
+
+function closeApprovalPanel(requestId: string) {
+  window.dispatchEvent(
+    new CustomEvent("webmcp:approval-resolved", { detail: { requestId } }),
+  );
 }
 
 // --- Tool definitions split by auth requirement ---
@@ -562,7 +631,7 @@ const authTools: ToolDef[] = [
     name: "place_order",
     title: "Place Order",
     description:
-      "Place an order from cart. Pass productIds to order specific items only — omit to order everything. Installments (3, 6, 12, 24 months) require each item's line total >= $100. Fees: 3/6mo 0%, 12mo 4%, 24mo 9%. Blocked if it exceeds the user's budget.",
+      "Prepare an order from the cart and ask the user to approve it. This PAUSES until the user approves or rejects it in the page's approval panel — you cannot approve on their behalf, and nothing is charged without their click. Tell them to expect the panel, then wait for the result. Pass productIds to order specific items only, or omit to order everything. Installments (3, 6, 12, 24 months) require each item's line total >= $100. Fees: 3/6mo 0%, 12mo 4%, 24mo 9%. Blocked if it exceeds the user's budget. Use preview_order first if you only want to show costs without prompting them.",
     inputSchema: {
       type: "object",
       properties: {
@@ -579,7 +648,7 @@ const authTools: ToolDef[] = [
       },
     },
     annotations: { readOnlyHint: false, destructiveHint: true },
-    execute: traced("place_order", "Place Order", async (input) => {
+    execute: traced("place_order", "Place Order", async (input, context) => {
       const prepared = await postJson("/api/orders/prepare", {
         installmentMonths: input.installmentMonths,
         productIds: input.productIds,
@@ -587,17 +656,49 @@ const authTools: ToolDef[] = [
       });
       if (!prepared.success) return json(prepared);
 
+      // The proposal is priced but not purchasable. Only the human can move it
+      // past pending_human_approval, through the page's own approval panel.
+      const outcome = await requestHumanApproval(prepared.proposal, context?.signal);
+
+      if (outcome.decision !== "approve") {
+        const reason = {
+          reject: {
+            code: "APPROVAL_DECLINED",
+            message:
+              "The user reviewed the order and declined it. Nothing was charged and the cart is unchanged. Ask what they would like to change before trying again.",
+          },
+          timeout: {
+            code: "APPROVAL_TIMEOUT",
+            message:
+              "The user did not respond to the approval panel in time. Nothing was charged. Confirm they are still there before retrying.",
+          },
+          cancelled: {
+            code: "APPROVAL_CANCELLED",
+            message: "The approval request was cancelled before the user decided. Nothing was charged.",
+          },
+        }[outcome.decision];
+        return json({ success: false, proposalId: prepared.proposal.id, error: reason });
+      }
+
       const approved = await postJson("/api/orders/approve", {
         proposalId: prepared.proposal.id,
         decision: "approve",
       });
-      if (!approved.success) return json(approved);
+      if (!approved.success) {
+        closeApprovalPanel(outcome.requestId);
+        return json(approved);
+      }
 
       const placed = await postJson("/api/orders/place", {
         proposalId: approved.proposal.id,
       });
+      closeApprovalPanel(outcome.requestId);
       emit();
-      return json(placed);
+      return json(
+        placed.success
+          ? { ...placed, approvedBy: "user", message: `${placed.message} Approved by the user.` }
+          : placed,
+      );
     }),
   },
   {
