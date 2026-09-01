@@ -109,73 +109,24 @@ function json(data: unknown): string {
   return JSON.stringify(data);
 }
 
-const APPROVAL_TIMEOUT_MS = 120_000;
 let approvalSeq = 0;
 
-interface ApprovalOutcome {
-  requestId: string;
-  decision: "approve" | "reject" | "timeout" | "cancelled";
-}
-
 /**
- * Hands a prepared proposal to the human and waits for their decision.
+ * Puts a prepared proposal on screen for the human and returns immediately.
  *
- * The agent cannot approve on the user's behalf: the only thing that resolves
- * this promise as approved is a click in the page's own approval panel.
+ * The agent is deliberately not made to wait here: it stays free to talk to
+ * the user, and learns the outcome through check_order_approval instead.
  */
-function requestHumanApproval(
-  proposal: unknown,
-  signal: AbortSignal | undefined,
-): Promise<ApprovalOutcome> {
-  return new Promise((resolve) => {
-    const requestId = `approval-${++approvalSeq}`;
-    let settled = false;
-
-    const settle = (decision: ApprovalOutcome["decision"]) => {
-      if (settled) return;
-      settled = true;
-      window.removeEventListener("webmcp:approval-response", onResponse);
-      signal?.removeEventListener("abort", onAbort);
-      clearTimeout(timer);
-      resolve({ requestId, decision });
-    };
-
-    const onResponse = (e: Event) => {
-      const detail = (e as CustomEvent).detail as {
-        requestId: string;
-        decision: "approve" | "reject";
-      };
-      if (detail.requestId !== requestId) return;
-      settle(detail.decision);
-    };
-
-    const dismiss = () =>
-      window.dispatchEvent(
-        new CustomEvent("webmcp:approval-cancel", { detail: { requestId } }),
-      );
-
-    const onAbort = () => {
-      dismiss();
-      settle("cancelled");
-    };
-
-    const timer = setTimeout(() => {
-      dismiss();
-      settle("timeout");
-    }, APPROVAL_TIMEOUT_MS);
-
-    window.addEventListener("webmcp:approval-response", onResponse);
-    signal?.addEventListener("abort", onAbort);
-    window.dispatchEvent(
-      new CustomEvent("webmcp:approval-request", { detail: { requestId, proposal } }),
-    );
-  });
+function openApprovalPanel(proposal: unknown) {
+  const requestId = `approval-${++approvalSeq}`;
+  window.dispatchEvent(
+    new CustomEvent("webmcp:approval-request", { detail: { requestId, proposal } }),
+  );
+  return requestId;
 }
 
-function closeApprovalPanel(requestId: string) {
-  window.dispatchEvent(
-    new CustomEvent("webmcp:approval-resolved", { detail: { requestId } }),
-  );
+function approvalPanelIsOpen() {
+  return document.querySelector(".approval-panel") !== null;
 }
 
 // --- Tool definitions split by auth requirement ---
@@ -628,10 +579,14 @@ const authTools: ToolDef[] = [
     }),
   },
   {
-    name: "place_order",
-    title: "Place Order",
+    name: "request_order_approval",
+    title: "Request Approval",
     description:
-      "Prepare an order from the cart and ask the user to approve it. This PAUSES until the user approves or rejects it in the page's approval panel — you cannot approve on their behalf, and nothing is charged without their click. Tell them to expect the panel, then wait for the result. Pass productIds to order specific items only, or omit to order everything. Installments (3, 6, 12, 24 months) require each item's line total >= $100. Fees: 3/6mo 0%, 12mo 4%, 24mo 9%. Blocked if it exceeds the user's budget. Use preview_order first if you only want to show costs without prompting them.",
+      "Price an order from the cart and put it on screen for the user to approve. This RETURNS IMMEDIATELY and does NOT place the order — it opens the approval panel and hands you back a proposalId. " +
+      "After calling it, tell the user in your reply to open the Procura tab and approve the order, then poll check_order_approval with the proposalId every 10-20 seconds until it reports 'placed' or 'rejected'. Do not assume it succeeded. " +
+      "You cannot approve for them: no tool approves, and the server refuses to place an unapproved order. Nothing is charged and the cart is untouched until they click Approve. " +
+      "Pass productIds to order specific items only, or omit to order everything. Installments (3, 6, 12, 24 months) require each item's line total >= $100. Fees: 3/6mo 0%, 12mo 4%, 24mo 9%. Refused if it exceeds the user's budget. " +
+      "Use preview_order instead when you only want to show costs — it never prompts the user.",
     inputSchema: {
       type: "object",
       properties: {
@@ -647,8 +602,8 @@ const authTools: ToolDef[] = [
         },
       },
     },
-    annotations: { readOnlyHint: false, destructiveHint: true },
-    execute: traced("place_order", "Place Order", async (input, context) => {
+    annotations: { readOnlyHint: false },
+    execute: traced("request_order_approval", "Request Approval", async (input) => {
       const prepared = await postJson("/api/orders/prepare", {
         installmentMonths: input.installmentMonths,
         productIds: input.productIds,
@@ -656,50 +611,68 @@ const authTools: ToolDef[] = [
       });
       if (!prepared.success) return json(prepared);
 
-      // The proposal is priced but not purchasable. Only the human can move it
-      // past pending_human_approval, through the page's own approval panel.
-      const outcome = await requestHumanApproval(prepared.proposal, context?.signal);
-
-      if (outcome.decision !== "approve") {
-        const reason = {
-          reject: {
-            code: "APPROVAL_DECLINED",
-            message:
-              "The user reviewed the order and declined it. Nothing was charged and the cart is unchanged. Ask what they would like to change before trying again.",
-          },
-          timeout: {
-            code: "APPROVAL_TIMEOUT",
-            message:
-              "The user did not respond to the approval panel in time. Nothing was charged. Confirm they are still there before retrying.",
-          },
-          cancelled: {
-            code: "APPROVAL_CANCELLED",
-            message: "The approval request was cancelled before the user decided. Nothing was charged.",
-          },
-        }[outcome.decision];
-        closeApprovalPanel(outcome.requestId);
-        return json({ success: false, proposalId: prepared.proposal.id, error: reason });
-      }
-
-      const approved = await postJson("/api/orders/approve", {
+      openApprovalPanel(prepared.proposal);
+      return json({
+        success: true,
+        status: "awaiting_approval",
         proposalId: prepared.proposal.id,
-        decision: "approve",
+        total: prepared.proposal.total,
+        itemCount: prepared.proposal.cart.items.length,
+        message:
+          "The approval panel is now open on the Procura page. Nothing has been charged. Ask the user to go to the Procura tab and approve it, then poll check_order_approval with this proposalId until it reports placed or rejected.",
       });
-      if (!approved.success) {
-        closeApprovalPanel(outcome.requestId);
-        return json(approved);
-      }
-
-      const placed = await postJson("/api/orders/place", {
-        proposalId: approved.proposal.id,
-      });
-      closeApprovalPanel(outcome.requestId);
-      emit();
-      return json(
-        placed.success
-          ? { ...placed, approvedBy: "user", message: `${placed.message} Approved by the user.` }
-          : placed,
+    }),
+  },
+  {
+    name: "check_order_approval",
+    title: "Check Approval",
+    description:
+      "Check what happened to an approval request you opened with request_order_approval. Poll this every 10-20 seconds after asking the user to approve. " +
+      "Returns status 'placed' with the order once they approve, 'rejected' if they declined, 'awaiting' while the panel is still on their screen, or 'abandoned' if the panel is gone and they never decided (they closed the tab or reloaded) — in which case ask them and call request_order_approval again.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        proposalId: {
+          type: "string",
+          description: "The proposalId returned by request_order_approval",
+        },
+      },
+      required: ["proposalId"],
+    },
+    annotations: { readOnlyHint: true },
+    execute: traced("check_order_approval", "Check Approval", async (input) => {
+      const result = await api(
+        `/api/orders/proposal/${encodeURIComponent(input.proposalId as string)}`,
       );
+      if (!result.success) return json(result);
+
+      if (result.order)
+        return json({
+          success: true,
+          status: "placed",
+          order: result.order,
+          message: `The user approved it. Order ${result.order.id} is placed for $${result.order.total}.`,
+        });
+
+      if (result.status === "rejected")
+        return json({
+          success: true,
+          status: "rejected",
+          message:
+            "The user reviewed the order and declined it. Nothing was charged and the cart is unchanged. Ask what they would like to change.",
+        });
+
+      // The proposal is still pending. The panel lives in the page, so its
+      // presence distinguishes "still deciding" from "never answered".
+      const stillOnScreen = approvalPanelIsOpen();
+      return json({
+        success: true,
+        status: stillOnScreen ? "awaiting" : "abandoned",
+        proposalId: input.proposalId,
+        message: stillOnScreen
+          ? "The approval panel is still open and the user has not decided yet. Wait 10-20 seconds and check again."
+          : "The approval panel is no longer on screen and the order was never approved, so the user likely reloaded or navigated away. Nothing was charged. Ask them again and call request_order_approval to reopen it.",
+      });
     }),
   },
   {

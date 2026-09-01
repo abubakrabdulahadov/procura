@@ -504,6 +504,36 @@ export async function cancelUserOrder(userId: string, orderId: string, source: A
   return { success: true as const, order: updated, message: `Order ${orderId} cancelled.` };
 }
 
+/**
+ * Status of a proposal plus the order it became, if any. Lets an agent that
+ * opened an approval request poll for the outcome instead of blocking on it.
+ */
+export async function getUserProposal(userId: string, proposalId: string) {
+  const [row] = await db
+    .select({ proposalJson: orderProposals.proposalJson, status: orderProposals.status })
+    .from(orderProposals)
+    .where(and(eq(orderProposals.id, proposalId), eq(orderProposals.userId, userId)));
+  if (!row)
+    return {
+      success: false as const,
+      error: { code: "PROPOSAL_NOT_FOUND", message: `No proposal exists with ID ${proposalId}.` },
+    };
+  const proposal = JSON.parse(row.proposalJson) as OrderProposal;
+  const [placed] = await db
+    .select({ orderJson: orders.orderJson })
+    .from(orders)
+    .where(and(eq(orders.proposalId, proposalId), eq(orders.userId, userId)));
+  return {
+    success: true as const,
+    proposalId,
+    status: row.status,
+    total: proposal.total,
+    itemCount: proposal.cart.items.length,
+    createdAt: proposal.createdAt,
+    order: placed ? (JSON.parse(placed.orderJson) as Order) : null,
+  };
+}
+
 export async function getUserOrder(userId: string, orderId: string) {
   const [row] = await db
     .select({ orderJson: orders.orderJson })

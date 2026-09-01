@@ -4670,6 +4670,16 @@ summary:focus-visible {
   color: #5b21b6;
   border: 1px solid rgba(99, 102, 241, 0.2);
 }
+.approval-error {
+  margin: 10px 0 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(185, 28, 28, 0.06);
+  border: 1px solid rgba(185, 28, 28, 0.16);
+  color: #b91c1c;
+  font-size: 9.5px;
+  line-height: 1.5;
+}
 .approval-dismiss {
   width: 28px;
   height: 28px;

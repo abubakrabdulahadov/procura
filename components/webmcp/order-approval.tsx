@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ShieldCheck, X } from "lucide-react";
-import { fetchBudget, type Budget } from "@/lib/procurement/client";
+import {
+  approveOrderRequest,
+  decideOrderRequest,
+  fetchBudget,
+  placeOrderRequest,
+  type Budget,
+} from "@/lib/procurement/client";
 import type { OrderProposal } from "@/types/procurement";
 
 interface PendingApproval {
@@ -13,87 +19,107 @@ interface PendingApproval {
 /**
  * Human-in-the-loop gate for agent-initiated orders.
  *
- * The agent can prepare a proposal, but it cannot place the order. This panel
- * is the only path from "pending_human_approval" to a real purchase, and it
- * renders the priced proposal the server actually produced — not a summary the
- * agent wrote — so the person approves what will genuinely be charged.
+ * The agent can prepare a proposal and open this panel, but it does not wait
+ * on the answer and cannot supply one. Approving here is what actually calls
+ * approve + place, so the purchase is driven entirely by the person's click;
+ * the agent only learns the outcome by polling the proposal's status.
  */
 export function OrderApproval() {
   const [pending, setPending] = useState<PendingApproval | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
-  const [submitting, setSubmitting] = useState<"approve" | null>(null);
+  const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const respond = useCallback(
-    (decision: "approve" | "reject") => {
-      if (!pending || submitting) return;
-      window.dispatchEvent(
-        new CustomEvent("webmcp:approval-response", {
-          detail: { requestId: pending.requestId, decision },
-        }),
-      );
-      if (decision === "reject") {
-        // Nothing is charged and no request is in flight, so the panel closes
-        // on its own rather than waiting for the caller to release it.
-        setPending(null);
-        setSubmitting(null);
-        return;
+  const close = useCallback(() => {
+    setPending(null);
+    setBusy(null);
+    setError(null);
+  }, []);
+
+  const approve = useCallback(async () => {
+    if (!pending || busy) return;
+    setBusy("approve");
+    setError(null);
+    try {
+      const approved = await approveOrderRequest(pending.proposal.id);
+      if (!approved.success || !approved.proposal) {
+        setBusy(null);
+        return setError(approved.error?.message ?? "Could not approve this order.");
       }
-      setSubmitting("approve");
-    },
-    [pending, submitting],
-  );
+      const placed = await placeOrderRequest(approved.proposal.id);
+      if (!placed.success) {
+        setBusy(null);
+        return setError(placed.error?.message ?? "Could not place this order.");
+      }
+      window.dispatchEvent(new CustomEvent("webmcp:sync"));
+      close();
+    } catch {
+      setBusy(null);
+      setError("Something went wrong while placing the order.");
+    }
+  }, [pending, busy, close]);
 
-  // Approval hands control back to the caller while it places the order. If
-  // that never reports back, release the panel instead of stranding the user
-  // on a spinner.
-  useEffect(() => {
-    if (submitting !== "approve") return;
-    const timer = setTimeout(() => {
-      setPending(null);
-      setSubmitting(null);
-    }, 30_000);
-    return () => clearTimeout(timer);
-  }, [submitting]);
+  const reject = useCallback(async () => {
+    if (!pending || busy) return;
+    setBusy("reject");
+    // Recorded server-side so the agent's status check can tell a decline
+    // apart from a request the user simply never answered.
+    await decideOrderRequest(pending.proposal.id, "reject").catch(() => {});
+    close();
+  }, [pending, busy, close]);
 
   useEffect(() => {
     const onRequest = (e: Event) => {
       const detail = (e as CustomEvent).detail as PendingApproval;
       setPending(detail);
-      setSubmitting(null);
+      setBusy(null);
+      setError(null);
       setBudget(null);
       void fetchBudget()
         .then((r) => r.success && r.budget && setBudget(r.budget))
         .catch(() => {});
     };
-    // Fired when the agent aborts or the request times out, so the panel does
-    // not linger asking for a decision that can no longer be delivered.
-    const onCancel = (e: Event) => {
-      const { requestId } = (e as CustomEvent).detail as { requestId: string };
-      setPending((prev) => (prev?.requestId === requestId ? null : prev));
-    };
-    const onResolved = (e: Event) => {
-      const { requestId } = (e as CustomEvent).detail as { requestId: string };
-      setPending((prev) => (prev?.requestId === requestId ? null : prev));
+    const onDismiss = (e: Event) => {
+      const { requestId } = (e as CustomEvent).detail as { requestId?: string };
+      setPending((prev) => (!requestId || prev?.requestId === requestId ? null : prev));
     };
 
     window.addEventListener("webmcp:approval-request", onRequest);
-    window.addEventListener("webmcp:approval-cancel", onCancel);
-    window.addEventListener("webmcp:approval-resolved", onResolved);
+    window.addEventListener("webmcp:approval-dismiss", onDismiss);
     return () => {
       window.removeEventListener("webmcp:approval-request", onRequest);
-      window.removeEventListener("webmcp:approval-cancel", onCancel);
-      window.removeEventListener("webmcp:approval-resolved", onResolved);
+      window.removeEventListener("webmcp:approval-dismiss", onDismiss);
     };
   }, []);
 
   useEffect(() => {
     if (!pending) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") respond("reject");
+      if (e.key === "Escape" && !busy) void reject();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pending, respond]);
+  }, [pending, busy, reject]);
+
+  // The agent may be talking to the user somewhere else entirely, so the tab
+  // itself has to ask them to come back and decide.
+  useEffect(() => {
+    if (!pending || busy) return;
+    const original = document.title;
+    let alternate = false;
+    const paint = () => {
+      document.title =
+        document.hidden && (alternate = !alternate) ? "⚠ Approve order — Procura" : original;
+    };
+    paint();
+    const ticker = setInterval(paint, 1200);
+    document.addEventListener("visibilitychange", paint);
+    return () => {
+      clearInterval(ticker);
+      document.removeEventListener("visibilitychange", paint);
+      document.title = original;
+    };
+  }, [pending, busy]);
 
   if (!pending) return null;
 
@@ -109,8 +135,8 @@ export function OrderApproval() {
           </span>
           <button
             className="approval-dismiss"
-            onClick={() => respond("reject")}
-            disabled={submitting !== null}
+            onClick={() => void reject()}
+            disabled={busy !== null}
             aria-label="Reject order"
           >
             <X size={16} />
@@ -179,22 +205,24 @@ export function OrderApproval() {
             <span>Total charged</span>
             <strong>${proposal.total.toFixed(2)}</strong>
           </div>
+
+          {error && (
+            <p className="approval-error" role="alert">
+              {error}
+            </p>
+          )}
         </div>
 
         <footer className="approval-actions">
-          <button
-            className="approval-reject"
-            onClick={() => respond("reject")}
-            disabled={submitting !== null}
-          >
+          <button className="approval-reject" onClick={() => void reject()} disabled={busy !== null}>
             Reject
           </button>
           <button
             className="approval-approve"
-            onClick={() => respond("approve")}
-            disabled={submitting !== null}
+            onClick={() => void approve()}
+            disabled={busy !== null}
           >
-            {submitting === "approve" ? "Placing order…" : `Approve $${proposal.total.toFixed(2)}`}
+            {busy === "approve" ? "Placing order…" : `Approve $${proposal.total.toFixed(2)}`}
           </button>
         </footer>
       </div>
