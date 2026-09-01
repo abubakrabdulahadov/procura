@@ -358,6 +358,94 @@ export async function setUserBudget(userId: string, amount: number) {
   return getUserBudget(userId);
 }
 
+export async function previewUserOrder(userId: string, installmentMonths?: number, productIds?: string[]) {
+  const fullCart = await getUserCart(userId);
+  if (!fullCart.items.length)
+    return {
+      success: false as const,
+      error: { code: "EMPTY_CART", message: "Cart is empty." },
+    };
+  const selectedItems = productIds
+    ? fullCart.items.filter((item) => productIds.includes(item.product.id))
+    : fullCart.items;
+  if (selectedItems.length === 0)
+    return {
+      success: false as const,
+      error: { code: "EMPTY_CART", message: "None of the selected products are in the cart." },
+    };
+  const subtotal = Number(selectedItems.reduce((s, i) => s + i.lineTotal, 0).toFixed(2));
+  const validInstallment = installmentMonths !== undefined && [3, 6, 12, 24].includes(installmentMonths);
+  const rate = installmentMonths === 12 ? 0.04 : installmentMonths === 24 ? 0.09 : 0;
+  const paymentFee = validInstallment ? Number((subtotal * rate).toFixed(2)) : 0;
+  const total = Number((subtotal + paymentFee).toFixed(2));
+  const installmentEligible = subtotal >= 100 && selectedItems.every((i) => i.lineTotal >= 100);
+  const budget = await getUserBudget(userId);
+  const ranges = selectedItems
+    .map((item) => checkProductAvailability(item.product.id, item.quantity))
+    .filter((item) => item.success);
+  return {
+    success: true as const,
+    preview: {
+      items: selectedItems.map((i) => ({
+        productId: i.product.id,
+        name: i.product.name,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        lineTotal: i.lineTotal,
+      })),
+      itemCount: selectedItems.reduce((s, i) => s + i.quantity, 0),
+      subtotal,
+      installmentMonths: validInstallment ? installmentMonths : null,
+      paymentFee,
+      total,
+      installmentEligible,
+      monthlyPayment: validInstallment && installmentMonths ? Number((total / installmentMonths).toFixed(2)) : null,
+      budgetStatus: budget.hasLimit
+        ? { withinBudget: total <= budget.remaining, remaining: budget.remaining, limit: budget.limit }
+        : { withinBudget: true, remaining: null, limit: null },
+      deliveryMinDays: ranges.length > 0 ? Math.max(...ranges.map((r) => r.availability.deliveryMinDays)) : 0,
+      deliveryMaxDays: ranges.length > 0 ? Math.max(...ranges.map((r) => r.availability.deliveryMaxDays)) : 0,
+    },
+  };
+}
+
+export async function restoreCancelledOrder(userId: string, orderId: string, source: ActionSource = "agent") {
+  const [row] = await db
+    .select({ orderJson: orders.orderJson })
+    .from(orders)
+    .where(and(eq(orders.id, orderId), eq(orders.userId, userId)));
+  if (!row)
+    return {
+      success: false as const,
+      error: { code: "ORDER_NOT_FOUND", message: `No order exists with ID ${orderId}.` },
+    };
+  const order = JSON.parse(row.orderJson) as Order;
+  if (order.status !== "cancelled")
+    return {
+      success: false as const,
+      error: { code: "ORDER_NOT_CANCELLED", message: `Order ${orderId} is not cancelled — only cancelled orders can be restored to cart.` },
+    };
+  const results: { productId: string; name: string; success: boolean; message?: string }[] = [];
+  for (const item of order.items) {
+    const res = await mutateUserCart(userId, "add", item.product.id, item.quantity, source);
+    results.push({
+      productId: item.product.id,
+      name: item.product.name,
+      success: res.success,
+      message: res.success ? undefined : res.error?.message,
+    });
+  }
+  const restored = results.filter((r) => r.success).length;
+  return {
+    success: true as const,
+    orderId,
+    restored,
+    total: order.items.length,
+    results,
+    message: `${restored} of ${order.items.length} items from order ${orderId} restored to cart.`,
+  };
+}
+
 export async function cancelUserOrder(userId: string, orderId: string, source: ActionSource = "user") {
   const [row] = await db
     .select({ orderJson: orders.orderJson })

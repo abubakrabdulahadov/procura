@@ -569,6 +569,73 @@ const authTools: ToolDef[] = [
       return json({ success: true, added, total: items.length, results });
     }),
   },
+  {
+    name: "get_order_details",
+    title: "Order Details",
+    description:
+      "Get full details of a specific order by ID — items, quantities, prices, payment terms, status, who placed/cancelled it, and timestamps.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        orderId: { type: "string", description: "Order ID (e.g. ORD-XXXXXXXX)" },
+      },
+      required: ["orderId"],
+    },
+    annotations: { readOnlyHint: true },
+    execute: traced("get_order_details", "Order Details", async (input) =>
+      json(await api(`/api/orders/${encodeURIComponent(input.orderId as string)}`)),
+    ),
+  },
+  {
+    name: "restore_cancelled_order",
+    title: "Restore to Cart",
+    description:
+      "Restore all items from a cancelled order back into the shopping cart. Only works on cancelled orders. Items are re-added with their original quantities.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        orderId: { type: "string", description: "Cancelled order ID to restore" },
+      },
+      required: ["orderId"],
+    },
+    annotations: { readOnlyHint: false },
+    execute: traced("restore_cancelled_order", "Restore to Cart", async (input) => {
+      const result = await postJson("/api/orders/restore", {
+        orderId: input.orderId,
+        source: "agent",
+      });
+      emit();
+      return json(result);
+    }),
+  },
+  {
+    name: "preview_order",
+    title: "Order Preview",
+    description:
+      "Preview what an order would cost without placing it. Shows items, subtotal, installment fees, monthly payment, total, budget status, and delivery estimate. Use this to help the user compare options before committing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        productIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Product IDs to include. Omit to preview all cart items.",
+        },
+        installmentMonths: {
+          type: "number",
+          enum: [3, 6, 12, 24],
+          description: "Installment plan to preview. Omit for single payment.",
+        },
+      },
+    },
+    annotations: { readOnlyHint: true },
+    execute: traced("preview_order", "Order Preview", async (input) =>
+      json(await postJson("/api/orders/preview", {
+        productIds: input.productIds,
+        installmentMonths: input.installmentMonths,
+      })),
+    ),
+  },
 ];
 
 export function WebMCPProvider() {
