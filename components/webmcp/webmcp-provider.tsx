@@ -362,6 +362,7 @@ const authTools: ToolDef[] = [
         action: "add",
         productId: input.productId,
         quantity: (input.quantity as number) || 1,
+        source: "agent",
       });
       emit();
       return json(result);
@@ -436,6 +437,7 @@ const authTools: ToolDef[] = [
       const prepared = await postJson("/api/orders/prepare", {
         installmentMonths: input.installmentMonths,
         productIds: input.productIds,
+        source: "agent",
       });
       if (!prepared.success) return json(prepared);
 
@@ -477,6 +479,7 @@ const authTools: ToolDef[] = [
     execute: traced("cancel_order", "Cancel Order", async (input) => {
       const result = await postJson("/api/orders/cancel", {
         orderId: input.orderId,
+        source: "agent",
       });
       emit();
       return json(result);
@@ -553,6 +556,7 @@ const authTools: ToolDef[] = [
           action: "add",
           productId: item.productId,
           quantity: item.quantity ?? 1,
+          source: "agent",
         });
         results.push({
           productId: item.productId,

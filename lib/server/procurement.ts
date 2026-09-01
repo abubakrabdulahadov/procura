@@ -3,12 +3,23 @@ import { products } from "@/lib/data/mock";
 import { checkProductAvailability } from "@/lib/procurement/product-intelligence";
 import { db } from "@/lib/server/database";
 import { budgets, carts, orderProposals, orders } from "@/lib/server/schema";
-import type { Cart, Order, OrderProposal } from "@/types/procurement";
+import type { ActionSource, Cart, Order, OrderProposal } from "@/types/procurement";
+
+type CartEntry = number | { qty: number; src: ActionSource };
+type CartEntriesMap = Record<string, CartEntry>;
+
+function entryQty(e: CartEntry): number {
+  return typeof e === "number" ? e : e.qty;
+}
+function entrySrc(e: CartEntry): ActionSource {
+  return typeof e === "number" ? "user" : e.src;
+}
 
 function cartSnapshot(row: { quantitiesJson: string; updatedAt: string }): Cart {
-  const quantities = JSON.parse(row.quantitiesJson) as Record<string, number>;
-  const items = Object.entries(quantities).flatMap(([productId, quantity]) => {
+  const entries = JSON.parse(row.quantitiesJson) as CartEntriesMap;
+  const items = Object.entries(entries).flatMap(([productId, entry]) => {
     const product = products.find((candidate) => candidate.id === productId);
+    const quantity = entryQty(entry);
     return product
       ? [
           {
@@ -16,6 +27,7 @@ function cartSnapshot(row: { quantitiesJson: string; updatedAt: string }): Cart 
             quantity,
             unitPrice: product.price,
             lineTotal: Number((product.price * quantity).toFixed(2)),
+            addedBy: entrySrc(entry),
           },
         ]
       : [];
@@ -47,6 +59,7 @@ export async function mutateUserCart(
   action: "add" | "update" | "remove",
   productId: string,
   quantity?: number,
+  source: ActionSource = "user",
 ) {
   const product = products.find((candidate) => candidate.id === productId);
   if (!product)
@@ -57,37 +70,39 @@ export async function mutateUserCart(
         message: `No catalog product exists with ID ${productId}.`,
       },
     };
-  const current = await getUserCart(userId);
-  const quantities = Object.fromEntries(
-    current.items.map((item) => [item.product.id, item.quantity]),
-  );
+  const [row] = await db
+    .select({ quantitiesJson: carts.quantitiesJson })
+    .from(carts)
+    .where(eq(carts.userId, userId));
+  const entries: CartEntriesMap = row ? JSON.parse(row.quantitiesJson) : {};
   if (action !== "remove" && (!Number.isInteger(quantity) || (quantity ?? 0) < 1))
     return {
       success: false as const,
       error: { code: "INVALID_QUANTITY", message: "quantity must be a positive integer." },
     };
-  if (action === "add") quantities[productId] = (quantities[productId] ?? 0) + (quantity ?? 0);
+  if (action === "add") {
+    const prev = entries[productId] ? entryQty(entries[productId]) : 0;
+    entries[productId] = { qty: prev + (quantity ?? 0), src: prev === 0 ? source : entrySrc(entries[productId] ?? 0) };
+  }
   if (action === "update") {
-    if (!quantities[productId])
+    if (!entries[productId])
       return {
         success: false as const,
         error: { code: "ITEM_NOT_IN_CART", message: `Product ${productId} is not in the cart.` },
       };
-    quantities[productId] = quantity ?? 1;
+    entries[productId] = { qty: quantity ?? 1, src: entrySrc(entries[productId]) };
   }
   if (action === "remove") {
-    if (!quantities[productId])
+    if (!entries[productId])
       return {
         success: false as const,
         error: { code: "ITEM_NOT_IN_CART", message: `Product ${productId} is not in the cart.` },
       };
-    delete quantities[productId];
+    delete entries[productId];
   }
   const updatedAt = new Date().toISOString();
-  await db
-    .update(carts)
-    .set({ quantitiesJson: JSON.stringify(quantities), updatedAt })
-    .where(eq(carts.userId, userId));
+  if (!row) await db.insert(carts).values({ userId, quantitiesJson: JSON.stringify(entries), updatedAt });
+  else await db.update(carts).set({ quantitiesJson: JSON.stringify(entries), updatedAt }).where(eq(carts.userId, userId));
   const cart = await getUserCart(userId);
   const message =
     action === "add"
@@ -98,7 +113,7 @@ export async function mutateUserCart(
   return { success: true as const, cart, message };
 }
 
-export async function prepareUserOrder(userId: string, installmentMonths?: number, productIds?: string[]) {
+export async function prepareUserOrder(userId: string, installmentMonths?: number, productIds?: string[], source: ActionSource = "user") {
   const fullCart = await getUserCart(userId);
   if (!fullCart.items.length)
     return {
@@ -175,6 +190,7 @@ export async function prepareUserOrder(userId: string, installmentMonths?: numbe
     deliveryMaxDays:
       ranges.length > 0 ? Math.max(...ranges.map((item) => item.availability.deliveryMaxDays)) : 0,
     status: "pending_human_approval",
+    source,
     createdAt: new Date().toISOString(),
   };
   await db.insert(orderProposals).values({
@@ -270,14 +286,17 @@ export async function placeUserOrder(userId: string, proposalId: string) {
     paymentFee: proposal.paymentFee,
     total: proposal.total,
     status: "placed",
+    placedBy: proposal.source ?? "user",
     createdAt: new Date().toISOString(),
   };
   const orderedIds = new Set(proposal.cart.items.map((i) => i.product.id));
-  const current = await getUserCart(userId);
+  const [cartRow] = await db
+    .select({ quantitiesJson: carts.quantitiesJson })
+    .from(carts)
+    .where(eq(carts.userId, userId));
+  const cartEntries: CartEntriesMap = cartRow ? JSON.parse(cartRow.quantitiesJson) : {};
   const remaining = Object.fromEntries(
-    current.items
-      .filter((i) => !orderedIds.has(i.product.id))
-      .map((i) => [i.product.id, i.quantity]),
+    Object.entries(cartEntries).filter(([id]) => !orderedIds.has(id)),
   );
   await db.transaction(async (tx) => {
     await tx.insert(orders).values({
@@ -339,7 +358,7 @@ export async function setUserBudget(userId: string, amount: number) {
   return getUserBudget(userId);
 }
 
-export async function cancelUserOrder(userId: string, orderId: string) {
+export async function cancelUserOrder(userId: string, orderId: string, source: ActionSource = "user") {
   const [row] = await db
     .select({ orderJson: orders.orderJson })
     .from(orders)
@@ -355,7 +374,7 @@ export async function cancelUserOrder(userId: string, orderId: string) {
       success: false as const,
       error: { code: "ORDER_ALREADY_CANCELLED", message: `Order ${orderId} is already cancelled.` },
     };
-  const updated: Order = { ...order, status: "cancelled" };
+  const updated: Order = { ...order, status: "cancelled", cancelledBy: source };
   await db
     .update(orders)
     .set({ orderJson: JSON.stringify(updated) })

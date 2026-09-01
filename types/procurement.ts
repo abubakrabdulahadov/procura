@@ -114,11 +114,14 @@ export type InstallmentOptionsResult =
     }
   | { success: false; error: { code: "PRODUCT_NOT_FOUND" | "INVALID_QUANTITY"; message: string } };
 
+export type ActionSource = "user" | "agent";
+
 export interface CartItem {
   product: Product;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  addedBy?: ActionSource;
 }
 
 export interface Cart {
@@ -156,6 +159,7 @@ export interface OrderProposal {
   deliveryMaxDays: number;
   status: OrderProposalStatus;
   approvalToken?: string;
+  source?: ActionSource;
   createdAt: string;
 }
 
@@ -180,6 +184,8 @@ export interface Order {
   paymentFee: number;
   total: number;
   status: "placed" | "cancelled";
+  placedBy?: ActionSource;
+  cancelledBy?: ActionSource;
   createdAt: string;
 }
 

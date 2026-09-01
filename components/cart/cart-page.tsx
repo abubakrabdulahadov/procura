@@ -92,6 +92,7 @@ export function CartPage() {
         name: i.product.name,
         quantity: i.quantity,
         lineTotal: i.lineTotal,
+        addedBy: i.addedBy ?? "user",
       })),
     };
     return () => {
@@ -188,6 +189,9 @@ export function CartPage() {
                         <span>{item.product.brand}</span>
                         <h2>{item.product.name}</h2>
                         <p>${item.unitPrice.toFixed(2)} per unit</p>
+                        {item.addedBy === "agent" && (
+                          <span className="action-source-badge agent">Added by agent</span>
+                        )}
                       </div>
                       <div className="cart-page-quantity">
                         <button

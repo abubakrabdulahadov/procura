@@ -3841,6 +3841,22 @@ summary:focus-visible {
   background: #f3e3df;
   color: #9c3b2a;
 }
+.action-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 7px;
+  font-weight: 640;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.action-source-badge.agent {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.12));
+  color: #6d28d9;
+  border: 1px solid rgba(99, 102, 241, 0.18);
+}
 .order-cancel-btn {
   height: 28px;
   padding: 0 10px;

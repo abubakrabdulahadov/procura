@@ -22,6 +22,7 @@ export async function POST(request: Request) {
     action?: "add" | "update" | "remove";
     productId?: string;
     quantity?: number;
+    source?: "user" | "agent";
   } | null;
   if (!body?.action || !body.productId || !["add", "update", "remove"].includes(body.action))
     return NextResponse.json(
@@ -31,6 +32,6 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     );
-  const result = await mutateUserCart(user.id, body.action, body.productId, body.quantity);
+  const result = await mutateUserCart(user.id, body.action, body.productId, body.quantity, body.source);
   return NextResponse.json(result, { status: result.success ? 200 : 400 });
 }

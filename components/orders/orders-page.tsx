@@ -39,6 +39,8 @@ export function OrdersPage() {
         status: o.status,
         total: o.total,
         itemCount: o.items.length,
+        placedBy: o.placedBy ?? "user",
+        cancelledBy: o.cancelledBy,
         createdAt: o.createdAt,
       })),
     };
@@ -96,6 +98,12 @@ export function OrdersPage() {
                       <b className={`order-status order-status-${order.status}`}>
                         {order.status === "placed" ? "Active" : "Cancelled"}
                       </b>
+                      {order.placedBy === "agent" && (
+                        <span className="action-source-badge agent">Ordered by agent</span>
+                      )}
+                      {order.cancelledBy === "agent" && (
+                        <span className="action-source-badge agent">Cancelled by agent</span>
+                      )}
                       {order.status === "placed" && (
                         <button
                           className="order-cancel-btn"
