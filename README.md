@@ -4,6 +4,8 @@ Procura is a WebMCP-enabled procurement marketplace where people and AI agents c
 workplace products, compare tradeoffs, manage a cart, and prepare an order together. A person
 always reviews and approves an agent-prepared order before it can be placed.
 
+**Live demo:** [procura-demo.up.railway.app](https://procura-demo.up.railway.app/)
+
 ## Why WebMCP
 
 Procurement combines specifications, price, delivery, financing, purchase history, and spending
@@ -97,9 +99,10 @@ pnpm build
 
 ## Deployment
 
-Deploy to a platform that supports Next.js and provide `DATABASE_URL` and `SESSION_SECRET` as
-production environment variables. The database user must be allowed to apply the included
-migrations.
+The public demo is deployed on Railway at
+[procura-demo.up.railway.app](https://procura-demo.up.railway.app/). A deployment needs
+`DATABASE_URL` and `SESSION_SECRET` as production environment variables. The database user must
+be allowed to apply the included migrations.
 
 ## License
 

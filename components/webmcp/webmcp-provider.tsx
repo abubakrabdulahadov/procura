@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { webMCPUser } from "@/lib/webmcp/auth-status";
 
 let globalNavigate: ((path: string) => void) | null = null;
 
@@ -155,7 +156,7 @@ const publicTools: ToolDef[] = [
           success: true,
           signed_in: true,
           currentPage,
-          user: { name: session.user.name, email: session.user.email },
+          user: webMCPUser(session.user),
         });
       }
       return json({
