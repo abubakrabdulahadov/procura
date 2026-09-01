@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
 import { CommerceHeader } from "@/components/layout/commerce-header";
 import { GlassSelect } from "@/components/ui/glass-select";
-import { ComparePanel } from "@/components/products/compare-panel";
 import { ProductDetail } from "@/components/products/product-detail";
 import { ProductVisual } from "@/components/products/product-visual";
 import { emptyCart, fetchCart, fetchOrders, mutateCart } from "@/lib/procurement/client";
@@ -23,17 +22,18 @@ export function ProductCatalog() {
   const [orderCount, setOrderCount] = useState(0);
   const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
   const result = useMemo(
-    () => searchProducts({ category: category === "all" ? undefined : category, maxPrice }),
-    [category, maxPrice],
+    () =>
+      searchProducts({
+        query: query || undefined,
+        category: category === "all" ? undefined : category,
+        maxPrice,
+      }),
+    [query, category, maxPrice],
   );
-  const visibleProducts = useMemo(() => {
-    if (!result.success) return [];
-    return result.products
-      .filter((product) =>
-        `${product.brand} ${product.name}`.toLowerCase().includes(query.toLowerCase()),
-      )
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [query, result]);
+  const visibleProducts = useMemo(
+    () => (result.success ? [...result.products].sort((a, b) => a.name.localeCompare(b.name)) : []),
+    [result],
+  );
 
   const reloadCounts = useCallback(() => {
     void Promise.all([fetchCart(), fetchOrders()])
@@ -249,7 +249,6 @@ export function ProductCatalog() {
           onAddToCart={addItem}
         />
       )}
-      <ComparePanel />
     </div>
   );
 }

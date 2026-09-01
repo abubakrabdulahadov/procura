@@ -37,8 +37,21 @@ interface ModelContext {
 }
 
 async function api(url: string, init?: RequestInit) {
-  const res = await fetch(url, init);
-  return res.json().catch(() => ({ success: false, error: "Server error" }));
+  try {
+    const res = await fetch(url, init);
+    return await res.json().catch(() => ({
+      success: false,
+      error: {
+        code: "INVALID_RESPONSE",
+        message: `The server returned a non-JSON response (HTTP ${res.status}).`,
+      },
+    }));
+  } catch {
+    return {
+      success: false,
+      error: { code: "NETWORK_ERROR", message: "Could not reach the Procura server." },
+    };
+  }
 }
 
 async function postJson(url: string, body: Record<string, unknown>) {
@@ -139,22 +152,38 @@ const publicTools: ToolDef[] = [
     name: "search_products",
     title: "Search Products",
     description:
-      "Search the Procura procurement catalog. Returns products with ID, name, brand, category, price, and specs. Use filters to narrow results.",
+      "Search the Procura procurement catalog. Returns products with ID, name, brand, category, price, and specs. All filters are optional and combine with AND. Uses the same search the catalog UI runs, so results match what the user sees.",
     inputSchema: {
       type: "object",
       properties: {
+        query: {
+          type: "string",
+          description: "Free-text match against brand and product name, e.g. 'thinkpad' or 'dell'",
+        },
         category: {
           type: "string",
           enum: ["monitor", "laptop", "accessory", "office", "furniture", "facilities"],
           description: "Filter by product category",
         },
+        minPrice: {
+          type: "number",
+          description: "Minimum unit price in USD",
+        },
         maxPrice: {
           type: "number",
           description: "Maximum unit price in USD",
         },
+        minSizeInches: {
+          type: "number",
+          description: "Minimum display size in inches (monitors and laptops)",
+        },
+        minResolution: {
+          type: "string",
+          description: "Minimum display resolution as WIDTHxHEIGHT, e.g. '2560x1440'. Compares by pixel area.",
+        },
         usbC: {
           type: "boolean",
-          description: "USB-C connectivity filter",
+          description: "Filter to products with (true) or without (false) USB-C",
         },
       },
     },
@@ -162,8 +191,12 @@ const publicTools: ToolDef[] = [
     execute: traced("search_products", "Search Products", async (input) => {
       const { searchProducts } = await import("@/lib/procurement/products");
       const result = searchProducts({
+        query: input.query as string | undefined,
         category: input.category as never,
+        minPrice: input.minPrice as number | undefined,
         maxPrice: input.maxPrice as number | undefined,
+        minSizeInches: input.minSizeInches as number | undefined,
+        minResolution: input.minResolution as string | undefined,
         usbC: input.usbC as boolean | undefined,
       });
       if (!result.success) return json(result);
@@ -251,6 +284,25 @@ const publicTools: ToolDef[] = [
     }),
   },
   {
+    name: "get_installment_options",
+    title: "Installment Options",
+    description:
+      "Get every installment plan for a product at a given quantity — monthly payment, fee, and total payable for 3, 6, 12, and 24 months. Fees: 3/6 months 0%, 12 months 4%, 24 months 9%. Plans require a line total of at least $100, so quantity changes eligibility. Use this to model financing before adding anything to the cart.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        productId: { type: "string", description: "Product ID" },
+        quantity: { type: "number", description: "Units to finance (default 1)" },
+      },
+      required: ["productId"],
+    },
+    annotations: { readOnlyHint: true },
+    execute: traced("get_installment_options", "Installment Options", async (input) => {
+      const { getInstallmentOptions } = await import("@/lib/procurement/product-intelligence");
+      return json(getInstallmentOptions(input.productId as string, (input.quantity as number) || 1));
+    }),
+  },
+  {
     name: "navigate_to",
     title: "Navigate",
     description:
@@ -270,7 +322,7 @@ const publicTools: ToolDef[] = [
       },
       required: ["page"],
     },
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: false, idempotentHint: true },
     execute: traced("navigate_to", "Navigate", async (input) => {
       const page = input.page as string;
       const nav = globalNavigate ?? ((p: string) => { window.location.href = p; });
@@ -308,14 +360,34 @@ const publicTools: ToolDef[] = [
       },
       required: ["productIds"],
     },
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: false, idempotentHint: true },
     execute: traced("highlight_products", "Recommend Products", async (input) => {
       const ids = input.productIds as string[];
-      window.dispatchEvent(
-        new CustomEvent("webmcp:highlight", { detail: { productIds: ids } }),
-      );
+      const onCatalog = document.querySelector("[data-product-id]") !== null;
+      if (!onCatalog)
+        return json({
+          success: false,
+          error: {
+            code: "NOT_ON_CATALOG",
+            message:
+              "Highlights render on the catalog product grid, which is not on screen. Call navigate_to with page 'catalog' first, then retry.",
+          },
+        });
+
+      window.dispatchEvent(new CustomEvent("webmcp:highlight", { detail: { productIds: ids } }));
       if (ids.length === 0) return json({ success: true, message: "Highlights cleared." });
-      return json({ success: true, highlighted: ids.length, productIds: ids });
+
+      const visible = ids.filter((id) => document.querySelector(`[data-product-id="${CSS.escape(id)}"]`));
+      const notVisible = ids.filter((id) => !visible.includes(id));
+      return json({
+        success: true,
+        highlighted: visible.length,
+        productIds: visible,
+        ...(notVisible.length > 0 && {
+          notVisible,
+          note: "These products are not in the current filtered view, so their badges are not on screen. Clear or widen the catalog filters to reveal them.",
+        }),
+      });
     }),
   },
   {
@@ -335,37 +407,74 @@ const publicTools: ToolDef[] = [
     name: "compare_products",
     title: "Compare Products",
     description:
-      "Open a side-by-side comparison panel for 2-4 products. Shows price, specs, rating in a table. Use 'recommended' to mark your top picks (column highlight + badge). Use 'highlights' to mark the best product per field (cell highlight). Field keys: price, rating, category, sizeInches, resolution, refreshRateHz, ramGb, storageGb, batteryHours, usbC, connection, material, packSize. Call with empty productIds to close.",
+      "Open a side-by-side comparison table over the current page for 2-4 products. Rows: price, rating, purchased count, delivery, category, and every spec the products have. The table reports catalog facts only — you decide what counts as better. Mark your overall pick(s) with 'recommended', and the winner of an individual row with 'highlights'. Row keys usable in highlights: price, rating, purchasedCount, delivery, category, sizeInches, resolution, refreshRateHz, ramGb, storageGb, batteryHours, usbC, connection, material, packSize. Call with an empty productIds array to close.",
     inputSchema: {
       type: "object",
       properties: {
         productIds: {
           type: "array",
           items: { type: "string" },
-          description: "Product IDs to compare (2-4 recommended)",
+          description: "Product IDs to compare (2-4 works best on screen)",
         },
         recommended: {
           type: "array",
           items: { type: "string" },
-          description: "Product IDs you recommend as best overall picks",
+          description: "Product IDs you recommend overall — shown with an 'Agent Pick' badge",
         },
         highlights: {
           type: "object",
-          description: "Per-field best product: { fieldKey: productId }. Highlights that cell as the best value for that field.",
+          description:
+            "Per-row winner as { rowKey: productId }, e.g. { \"price\": \"hp-e27q-g5\", \"resolution\": \"lg-27up850n-w\" }. That cell is highlighted as the best value for that row.",
+        },
+        note: {
+          type: "string",
+          description: "One short line shown above the table explaining your reasoning to the user",
         },
       },
       required: ["productIds"],
     },
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: false, idempotentHint: true },
     execute: traced("compare_products", "Compare Products", async (input) => {
       const ids = input.productIds as string[];
-      const rec = input.recommended as string[] | undefined;
-      const hl = input.highlights as Record<string, string> | undefined;
+      if (ids.length === 0) {
+        window.dispatchEvent(new CustomEvent("webmcp:compare", { detail: { productIds: [] } }));
+        return json({ success: true, message: "Comparison closed." });
+      }
+
+      const { searchProducts } = await import("@/lib/procurement/products");
+      const all = searchProducts({});
+      const known = new Set(all.success ? all.products.map((p) => p.id) : []);
+      const valid = ids.filter((id) => known.has(id));
+      const unknown = ids.filter((id) => !known.has(id));
+
+      if (valid.length === 0)
+        return json({
+          success: false,
+          error: {
+            code: "PRODUCT_NOT_FOUND",
+            message: `None of these product IDs exist in the catalog: ${unknown.join(", ")}. Use search_products to get valid IDs.`,
+          },
+        });
+
       window.dispatchEvent(
-        new CustomEvent("webmcp:compare", { detail: { productIds: ids, recommended: rec, highlights: hl } }),
+        new CustomEvent("webmcp:compare", {
+          detail: {
+            productIds: valid,
+            recommended: input.recommended as string[] | undefined,
+            highlights: input.highlights as Record<string, string> | undefined,
+            note: input.note as string | undefined,
+          },
+        }),
       );
-      if (ids.length === 0) return json({ success: true, message: "Comparison closed." });
-      return json({ success: true, comparing: ids.length, productIds: ids });
+      return json({
+        success: true,
+        comparing: valid.length,
+        productIds: valid,
+        ...(unknown.length > 0 && {
+          skipped: unknown,
+          note: "These IDs are not in the catalog and were left out of the table.",
+        }),
+      });
     }),
   },
 ];

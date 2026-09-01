@@ -22,7 +22,9 @@ export interface Product {
 }
 
 export interface SearchProductsInput {
+  query?: string;
   category?: ProductCategory;
+  minPrice?: number;
   maxPrice?: number;
   minSizeInches?: number;
   minResolution?: string;

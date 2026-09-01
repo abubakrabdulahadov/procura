@@ -3,22 +3,30 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { ProductVisual } from "@/components/products/product-visual";
-import { products as catalog } from "@/lib/data/mock";
-import type { Product } from "@/types/procurement";
+import {
+  checkProductAvailability,
+  getProduct,
+} from "@/lib/procurement/product-intelligence";
+import type { Product, ProductIntelligence } from "@/types/procurement";
 
-interface ProductIntel {
-  product: Product;
-  rating: number;
-  reviewCount: number;
+interface CompareItem {
+  product: Product & ProductIntelligence;
+  deliveryLabel: string;
 }
 
-function getIntel(id: string): ProductIntel | null {
-  const product = catalog.find((p) => p.id === id);
-  if (!product) return null;
-  const hash = [...id].reduce((s, c) => s + c.charCodeAt(0), 0);
-  const rating = 3.5 + (hash % 15) / 10;
-  const reviewCount = 20 + (hash % 180);
-  return { product, rating, reviewCount };
+/**
+ * Resolves a product through the same intelligence layer the agent's
+ * get_product_details tool uses, so the comparison table and the agent
+ * always report identical ratings, review counts, and delivery windows.
+ */
+function resolveItem(id: string): CompareItem | null {
+  const detail = getProduct(id);
+  if (!detail.success) return null;
+  const availability = checkProductAvailability(id, 1);
+  return {
+    product: detail.product,
+    deliveryLabel: availability.success ? availability.availability.deliveryLabel : "—",
+  };
 }
 
 const specLabels: { key: keyof Product["specs"]; label: string; format?: (v: unknown) => string }[] = [
@@ -37,9 +45,10 @@ const specLabels: { key: keyof Product["specs"]; label: string; format?: (v: unk
 type Highlights = Record<string, string>;
 
 export function ComparePanel() {
-  const [items, setItems] = useState<ProductIntel[]>([]);
+  const [items, setItems] = useState<CompareItem[]>([]);
   const [recommended, setRecommended] = useState<Set<string>>(new Set());
   const [highlights, setHighlights] = useState<Highlights>({});
+  const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
     const onCompare = (e: Event) => {
@@ -47,23 +56,35 @@ export function ComparePanel() {
         productIds: string[];
         recommended?: string[];
         highlights?: Highlights;
+        note?: string;
       };
       if (detail.productIds.length === 0) {
         setItems([]);
         setRecommended(new Set());
         setHighlights({});
+        setNote(null);
         return;
       }
       const resolved = detail.productIds
-        .map((id) => getIntel(id))
-        .filter((item): item is ProductIntel => item !== null);
+        .map(resolveItem)
+        .filter((item): item is CompareItem => item !== null);
       setItems(resolved);
       setRecommended(new Set(detail.recommended ?? []));
       setHighlights(detail.highlights ?? {});
+      setNote(detail.note ?? null);
     };
     window.addEventListener("webmcp:compare", onCompare);
     return () => window.removeEventListener("webmcp:compare", onCompare);
   }, []);
+
+  useEffect(() => {
+    if (items.length === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [items.length]);
 
   if (items.length === 0) return null;
 
@@ -71,7 +92,12 @@ export function ComparePanel() {
     items.some((item) => item.product.specs[spec.key] !== undefined),
   );
 
-  const close = () => { setItems([]); setRecommended(new Set()); setHighlights({}); };
+  function close() {
+    setItems([]);
+    setRecommended(new Set());
+    setHighlights({});
+    setNote(null);
+  }
 
   const cellClass = (field: string, productId: string) => {
     if (highlights[field] === productId) return "compare-cell-best";
@@ -80,7 +106,7 @@ export function ComparePanel() {
   };
 
   return (
-    <div className="compare-overlay" onClick={close}>
+    <div className="compare-overlay" onClick={close} role="dialog" aria-modal="true" aria-label="Product comparison">
       <div className="compare-panel" onClick={(e) => e.stopPropagation()}>
         <header className="compare-header">
           <h2>Compare Products</h2>
@@ -88,6 +114,8 @@ export function ComparePanel() {
             <X size={18} />
           </button>
         </header>
+
+        {note && <p className="compare-note">{note}</p>}
 
         <div className="compare-scroll">
           <table className="compare-table">
@@ -119,18 +147,35 @@ export function ComparePanel() {
                 ))}
               </tr>
               <tr>
-                <td className="compare-label">Category</td>
+                <td className="compare-label">Rating</td>
                 {items.map((item) => (
-                  <td key={item.product.id} className={cellClass("category", item.product.id)}>
-                    {item.product.category}
+                  <td key={item.product.id} className={cellClass("rating", item.product.id)}>
+                    {item.product.rating.toFixed(1)} / 5
+                    <small className="compare-sub">{item.product.reviewCount} reviews</small>
                   </td>
                 ))}
               </tr>
               <tr>
-                <td className="compare-label">Rating</td>
+                <td className="compare-label">Purchased</td>
                 {items.map((item) => (
-                  <td key={item.product.id} className={cellClass("rating", item.product.id)}>
-                    {item.rating.toFixed(1)} / 5 ({item.reviewCount})
+                  <td key={item.product.id} className={cellClass("purchasedCount", item.product.id)}>
+                    {item.product.purchasedCount.toLocaleString()} times
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td className="compare-label">Delivery</td>
+                {items.map((item) => (
+                  <td key={item.product.id} className={cellClass("delivery", item.product.id)}>
+                    {item.deliveryLabel}
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td className="compare-label">Category</td>
+                {items.map((item) => (
+                  <td key={item.product.id} className={cellClass("category", item.product.id)}>
+                    {item.product.category}
                   </td>
                 ))}
               </tr>
