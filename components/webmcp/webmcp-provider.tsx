@@ -504,6 +504,61 @@ const authTools: ToolDef[] = [
       return json(result);
     }),
   },
+  {
+    name: "get_spending_analytics",
+    title: "Spending Analytics",
+    description:
+      "Get spending analytics — total spent, order count, average order value, category breakdown, top category, and budget utilization. Data only, no interpretation.",
+    inputSchema: { type: "object", properties: {} },
+    annotations: { readOnlyHint: true },
+    execute: traced("get_spending_analytics", "Spending Analytics", async () =>
+      json(await api("/api/analytics")),
+    ),
+  },
+  {
+    name: "bulk_add_to_cart",
+    title: "Bulk Add to Cart",
+    description:
+      "Add multiple products to cart in one call. Each item needs a productId and optional quantity (default 1). Faster than calling add_to_cart repeatedly.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              productId: { type: "string", description: "Product ID" },
+              quantity: { type: "number", description: "Quantity (default 1)" },
+            },
+            required: ["productId"],
+          },
+          description: "Products to add",
+        },
+      },
+      required: ["items"],
+    },
+    annotations: { readOnlyHint: false },
+    execute: traced("bulk_add_to_cart", "Bulk Add to Cart", async (input) => {
+      const items = input.items as { productId: string; quantity?: number }[];
+      const results: { productId: string; success: boolean; message?: string }[] = [];
+      for (const item of items) {
+        const res = await postJson("/api/cart", {
+          action: "add",
+          productId: item.productId,
+          quantity: item.quantity ?? 1,
+        });
+        results.push({
+          productId: item.productId,
+          success: !!res.success,
+          message: res.message ?? res.error?.message,
+        });
+      }
+      emit();
+      const added = results.filter((r) => r.success).length;
+      return json({ success: true, added, total: items.length, results });
+    }),
+  },
 ];
 
 export function WebMCPProvider() {
