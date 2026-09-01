@@ -677,6 +677,7 @@ const authTools: ToolDef[] = [
             message: "The approval request was cancelled before the user decided. Nothing was charged.",
           },
         }[outcome.decision];
+        closeApprovalPanel(outcome.requestId);
         return json({ success: false, proposalId: prepared.proposal.id, error: reason });
       }
 

@@ -21,20 +21,39 @@ interface PendingApproval {
 export function OrderApproval() {
   const [pending, setPending] = useState<PendingApproval | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
-  const [submitting, setSubmitting] = useState<"approve" | "reject" | null>(null);
+  const [submitting, setSubmitting] = useState<"approve" | null>(null);
 
   const respond = useCallback(
     (decision: "approve" | "reject") => {
       if (!pending || submitting) return;
-      setSubmitting(decision);
       window.dispatchEvent(
         new CustomEvent("webmcp:approval-response", {
           detail: { requestId: pending.requestId, decision },
         }),
       );
+      if (decision === "reject") {
+        // Nothing is charged and no request is in flight, so the panel closes
+        // on its own rather than waiting for the caller to release it.
+        setPending(null);
+        setSubmitting(null);
+        return;
+      }
+      setSubmitting("approve");
     },
     [pending, submitting],
   );
+
+  // Approval hands control back to the caller while it places the order. If
+  // that never reports back, release the panel instead of stranding the user
+  // on a spinner.
+  useEffect(() => {
+    if (submitting !== "approve") return;
+    const timer = setTimeout(() => {
+      setPending(null);
+      setSubmitting(null);
+    }, 30_000);
+    return () => clearTimeout(timer);
+  }, [submitting]);
 
   useEffect(() => {
     const onRequest = (e: Event) => {
@@ -168,7 +187,7 @@ export function OrderApproval() {
             onClick={() => respond("reject")}
             disabled={submitting !== null}
           >
-            {submitting === "reject" ? "Rejecting…" : "Reject"}
+            Reject
           </button>
           <button
             className="approval-approve"
