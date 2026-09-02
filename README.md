@@ -6,6 +6,14 @@ always reviews and approves an agent-prepared order before it can be placed.
 
 **Live demo:** [procura-demo.up.railway.app](https://procura-demo.up.railway.app/)
 
+Sign in with username `judge` and password `ProcuraDemo2026`, or create your own account in one
+screen — no email required. Open it in ChatGPT's in-app browser, or in Chrome with
+`chrome://flags/#enable-webmcp-testing` enabled, and the tools register automatically.
+
+Try: _"Compare the ASUS ProArt PA278CV, LG UltraFine 27UP850N-W and BenQ PD2705Q, recommend one
+for a design team, then add two of your pick and place the order."_ The comparison opens on the
+page, and the order stops for your approval.
+
 ## Why WebMCP
 
 Procurement combines specifications, price, delivery, financing, purchase history, and spending
